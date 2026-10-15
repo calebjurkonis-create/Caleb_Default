@@ -156,6 +156,50 @@ function Field({ store }: { store: Store }) {
     }
   }, [visible, routeLeads])
 
+  // Releasing doors must not fail silently: anything that doesn't go through is kept on this
+  // phone and retried when the signal comes back, when the app reopens, and every minute.
+  const [pendingRelease, setPendingRelease] = usePref<string[]>(`knockroute-pending-release-${me.id}`, [])
+  const pendingRef = useRef(pendingRelease)
+  pendingRef.current = pendingRelease
+  async function releaseDoors(ids: string[], quiet = false): Promise<boolean> {
+    const all = [...new Set([...pendingRef.current, ...ids])]
+    if (!all.length) return true
+    try {
+      await store.claim(all, false)
+      setPendingRelease([])
+      return true
+    } catch {
+      setPendingRelease(all)
+      if (!quiet) flash(`Couldn't release ${all.length} door${all.length === 1 ? '' : 's'}: no signal. KnockRoute will keep trying.`)
+      return false
+    }
+  }
+  async function claimDoors(ids: string[]) {
+    // A door taken back onto a route must not be released later by a queued retry.
+    if (pendingRef.current.some((id) => ids.includes(id))) setPendingRelease(pendingRef.current.filter((id) => !ids.includes(id)))
+    try {
+      await store.claim(ids, true)
+    } catch {
+      flash("Couldn't mark these doors as yours: check your signal. Teammates may not see your route yet.")
+    }
+  }
+  useEffect(() => {
+    const retry = () => {
+      if (pendingRef.current.length && navigator.onLine !== false) releaseDoors([], true)
+    }
+    retry()
+    const onVisible = () => document.visibilityState === 'visible' && retry()
+    window.addEventListener('online', retry)
+    document.addEventListener('visibilitychange', onVisible)
+    const t = setInterval(retry, 60_000)
+    return () => {
+      window.removeEventListener('online', retry)
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const routable = (l: Lead) => l.lat != null && l.lng != null && !STATUS[l.status].closed && !claimedByOthers.has(l.id)
 
   async function planRoute(leads: Lead[]) {
@@ -176,9 +220,9 @@ function Field({ store }: { store: Store }) {
         ordered = ids.map((id) => byLead.get(id)!)
       }
     }
-    if (route) await store.claim(route.ids.filter((id) => !ordered.some((o) => o.id === id)), false).catch(() => {})
+    if (route) await releaseDoors(route.ids.filter((id) => !ordered.some((o) => o.id === id)))
     setRoute({ ids: ordered.map((l) => l.id), startedAt: new Date().toISOString(), start: { lat: start.lat, lng: start.lng } })
-    await store.claim(ordered.map((l) => l.id), true).catch(() => {})
+    await claimDoors(ordered.map((l) => l.id))
     setSelection(new Set())
     mapRef.current?.fit(ordered as Point[])
     setTab('route')
@@ -197,15 +241,14 @@ function Field({ store }: { store: Store }) {
   async function toggleOnRoute(l: Lead) {
     if (route?.ids.includes(l.id)) {
       setRoute({ ...route, ids: route.ids.filter((id) => id !== l.id) })
-      await store.claim([l.id], false).catch(() => {})
-      flash('Removed from route')
+      if (await releaseDoors([l.id])) flash('Removed from route')
     } else {
       const ids = [...(route?.ids ?? []), l.id]
       const leads = ids.map((id) => byId.get(id)).filter((x): x is Lead => !!x && x.lat != null)
       const start = here ?? (leads[0] as Point)
       const ordered = optimizeOrder(start, leads as (Lead & Point)[])
       setRoute({ ids: ordered.map((x) => x.id), startedAt: route?.startedAt ?? new Date().toISOString() })
-      await store.claim([l.id], true).catch(() => {})
+      await claimDoors([l.id])
       flash(`Added as stop ${ordered.findIndex((x) => x.id === l.id) + 1}`)
     }
   }
@@ -254,9 +297,8 @@ function Field({ store }: { store: Store }) {
   async function endRoute() {
     if (!route) return
     const unvisited = routeLeads.filter((l) => !doneStops.has(l.id)).map((l) => l.id)
-    await store.claim(unvisited, false).catch(() => {})
     setRoute(null)
-    flash('Route ended')
+    if (await releaseDoors(unvisited)) flash('Route ended. Unvisited doors are free for the team.')
   }
 
   function onSaved(l: Lead, outcome: Outcome) {

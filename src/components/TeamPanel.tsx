@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { activityLeadName, memberName, type Snapshot, type Store } from '../data/store'
 import { STATUS } from '../lib/dispositions'
-import { clockTime, isToday, shortName, timeAgo } from '../lib/leads'
+import { activeClaim, clockTime, isToday, shortName, timeAgo } from '../lib/leads'
 import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, ratioLabel, saveFile, type AgentRow, type Period } from '../lib/reports'
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
@@ -279,6 +279,8 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
           </div>
         )}
 
+        {isManager && <DoorsOnRoutes store={store} snap={snap} />}
+
         {isManager && <RemoveByMonth store={store} snap={snap} />}
 
         {isManager && store.setRole && (
@@ -403,6 +405,68 @@ function RemoveByMonth({ store, snap }: { store: Store; snap: Snapshot }) {
           </button>
         ))}
       {msg && <div className="muted">{msg}</div>}
+    </div>
+  )
+}
+
+/** Managers: see whose route holds which doors, and free them up (e.g. a release that never went through). */
+function DoorsOnRoutes({ store, snap }: { store: Store; snap: Snapshot }) {
+  const [confirm, setConfirm] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const byPerson = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const l of snap.leads) {
+      const who = activeClaim(l)
+      if (who) m.set(who, [...(m.get(who) ?? []), l.id])
+    }
+    return [...m.entries()].sort((a, b) => b[1].length - a[1].length)
+  }, [snap.leads])
+
+  async function release(who: string, ids: string[]) {
+    setBusy(true)
+    setMsg(null)
+    try {
+      await store.claim(ids, false)
+      setMsg(`Released ${ids.length} door${ids.length === 1 ? '' : 's'} from ${memberName(snap, who)}'s route.`)
+    } catch (e) {
+      setMsg(`Couldn't release them: ${(e as Error).message}. Check your signal and try again.`)
+    } finally {
+      setBusy(false)
+      setConfirm(null)
+    }
+  }
+
+  return (
+    <div className="section">
+      <h3 style={{ fontSize: 20 }}>Doors on routes right now</h3>
+      {byPerson.length === 0 ? (
+        <div className="muted">Nobody has doors on a route right now.</div>
+      ) : (
+        <ul className="list">
+          {byPerson.map(([who, ids]) => (
+            <li key={who} className="switch" style={{ flexWrap: 'wrap' }}>
+              <span>
+                <b>{memberName(snap, who)}</b> <span className="muted num">· {ids.length} door{ids.length === 1 ? '' : 's'}</span>
+              </span>
+              {confirm === who ? (
+                <span className="row" style={{ gap: 6 }}>
+                  <button className="btn small danger" disabled={busy} onClick={() => release(who, ids)}>
+                    {busy ? 'Releasing…' : `Release ${ids.length}`}
+                  </button>
+                  <button className="btn small" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
+                </span>
+              ) : (
+                <button className="btn small" onClick={() => setConfirm(who)}>Release all…</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="muted" style={{ fontSize: 13 }}>
+        Doors also free up on their own 12 hours after a route is planned. Releasing doesn't change anyone's dispositions.
+      </div>
+      {msg && <div className="muted" style={{ fontSize: 14 }}>{msg}</div>}
     </div>
   )
 }

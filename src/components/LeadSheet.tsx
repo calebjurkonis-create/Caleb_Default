@@ -27,6 +27,8 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<Activity[] | null>(null)
   const [copied, setCopied] = useState(false)
+  const [releasing, setReleasing] = useState(false)
+  const [releaseMsg, setReleaseMsg] = useState<string | null>(null)
 
   // Fresh form for each lead; reload history whenever the team logs something on it.
   useEffect(() => {
@@ -124,12 +126,34 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           {age && <span className={`tag${age.monthsAway <= 2 ? ' warn' : ''}`}>{age.label}</span>}
           <span className="tag">{lead.assignedTo ? `Assigned to ${memberName(snap, lead.assignedTo)}` : 'Shared pool'}</span>
           {claim && <span className="tag warn">{claim === snap.me?.id ? 'On your route today' : `On ${memberName(snap, claim)}'s route today`}</span>}
+          {claim && claim !== snap.me?.id && isManager && (
+            <button
+              className="btn small"
+              disabled={releasing}
+              onClick={async () => {
+                setReleasing(true)
+                setReleaseMsg(null)
+                try {
+                  await store.claim([lead.id], false)
+                  setReleaseMsg('Released. Anyone can route this door now.')
+                } catch (e) {
+                  setReleaseMsg(`Couldn't release: ${(e as Error).message}. Check your signal and try again.`)
+                } finally {
+                  setReleasing(false)
+                }
+              }}
+            >
+              {releasing ? 'Releasing…' : 'Release'}
+            </button>
+          )}
           {lead.attempts > 0 && <span className="tag">{lead.attempts} attempt{lead.attempts === 1 ? '' : 's'}</span>}
           {!hasPoint && <span className="tag warn">Address not found on map</span>}
           {hasPoint && lead.pinApprox && (
             <span className="tag warn">Pin is on the street · look for house #{houseNumberOf(lead) || '?'}</span>
           )}
         </div>
+
+        {releaseMsg && <div className="muted" style={{ fontSize: 14 }}>{releaseMsg}</div>}
 
         <div className="row">
           {hasPoint && (
