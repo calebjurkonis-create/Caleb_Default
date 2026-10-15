@@ -3,7 +3,7 @@ import { ImportWizard } from './components/ImportWizard'
 import { Icon, Logo, type IconName } from './components/Icon'
 import { LeadSheet } from './components/LeadSheet'
 import { LeadsPanel } from './components/LeadsPanel'
-import { Login } from './components/Login'
+import { Login, SetPassword } from './components/Login'
 import { MapView, type MapHandle } from './components/MapView'
 import { MorePanel } from './components/MorePanel'
 import { RoutePanel } from './components/RoutePanel'
@@ -63,6 +63,7 @@ export function App({ store }: { store: Store }) {
     )
   }
   if (!snap.me) return <Login store={store} snap={snap} />
+  if (snap.mustChangePassword) return <SetPassword store={store} name={snap.me.name.split(' ')[0]} />
   return <Field store={store} />
 }
 

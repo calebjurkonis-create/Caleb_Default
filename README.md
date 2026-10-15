@@ -36,6 +36,17 @@ You need two free accounts. About 20 minutes total.
    After that, everything else happens in the app's **Team** tab: set who's a manager and fix how names show.
 6. **Project Settings → API Keys** (or the **Connect** button at the top): copy the **Project URL** and the **anon / publishable** key.
 
+#### Usernames instead of emails
+Teammates without an email you can use sign in with a username (e.g. `calebjurkonis`). Fill in
+[`supabase/updates/002-add-team-template.sql`](supabase/updates/002-add-team-template.sql) and run it in the SQL Editor:
+it creates the logins and sets each person's role. Everyone picks their own password the first time they sign in.
+Behind the scenes a username is stored as `username@knockroute.example.com`; no email is ever sent.
+
+#### Database updates
+Run each file in [`supabase/updates/`](supabase/updates/) once, in order, in the SQL Editor
+(`schema.sql` already includes them for brand-new setups):
+- `001-keep-history-and-street-pins.sql`: street-level pins; removing leads keeps their door-knock history.
+
 #### Adding and removing people later
 - **Add:** Authentication → Users → Add user → Create new user (step 4), then set their name and role in the app's Team tab.
 - **Remove:** Authentication → Users → click the person → **Delete user**. Their past dispositions stay in the history.

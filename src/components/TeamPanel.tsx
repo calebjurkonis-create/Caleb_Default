@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { memberName, type Snapshot, type Store } from '../data/store'
+import { activityLeadName, memberName, type Snapshot, type Store } from '../data/store'
 import { STATUS } from '../lib/dispositions'
 import { clockTime, isToday, shortName, timeAgo } from '../lib/leads'
 import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, saveFile, type AgentRow, type Period } from '../lib/reports'
@@ -215,7 +215,7 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
                         {lead ? (
                           <button className="link" onClick={() => onOpenLead(lead)}>{shortName(lead)}</button>
                         ) : (
-                          'a lead'
+                          activityLeadName(a, undefined)
                         )}{' '}
                         · {STATUS[a.outcome].label}
                       </div>
@@ -275,6 +275,8 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
           </div>
         )}
 
+        {isManager && <RemoveByMonth store={store} snap={snap} />}
+
         {isManager && store.setRole && (
           <div className="section">
             <h3 style={{ fontSize: 20 }}>Team members</h3>
@@ -312,5 +314,91 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
         )}
       </div>
     </section>
+  )
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** Clear out everyone born in a given month once their 65th birthday has come and gone. */
+function RemoveByMonth({ store, snap }: { store: Store; snap: Snapshot }) {
+  const [month, setMonth] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const months = useMemo(() => {
+    const c = new Map<string, number>()
+    for (const l of snap.leads) {
+      const ym = /^(\d{4})(\d{2})/.exec(l.dob)
+      if (ym) c.set(`${ym[1]}${ym[2]}`, (c.get(`${ym[1]}${ym[2]}`) ?? 0) + 1)
+    }
+    return [...c.entries()].sort(([a], [b]) => a.localeCompare(b))
+  }, [snap.leads])
+
+  const label = (ym: string) => {
+    const y = Number(ym.slice(0, 4))
+    const m = Number(ym.slice(4, 6)) - 1
+    return `Born ${MONTHS[m]} ${y} (turn 65 ${MONTHS[m]} ${y + 65})`
+  }
+  const ids = month ? snap.leads.filter((l) => l.dob.startsWith(month)).map((l) => l.id) : []
+  const worked = month ? snap.leads.filter((l) => l.dob.startsWith(month) && l.status !== 'new').length : 0
+
+  async function remove() {
+    setBusy(true)
+    setMsg(null)
+    try {
+      if (!(await store.canDeleteLeadsSafely())) {
+        setMsg('One-time database update needed first, so removing leads keeps your team’s door-knock history. Run supabase/updates/001 in Supabase (see the setup guide), then try again.')
+        return
+      }
+      await store.deleteLeads(ids)
+      setMsg(`Removed ${ids.length.toLocaleString()} leads. Their door-knock history is still in the reports.`)
+      setMonth('')
+    } catch (e) {
+      setMsg(`Couldn't remove them: ${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+      setConfirming(false)
+    }
+  }
+
+  if (!months.length) return null
+  return (
+    <div className="section">
+      <h3 style={{ fontSize: 20 }}>Remove a birth month</h3>
+      <div className="muted" style={{ fontSize: 14 }}>
+        Clears everyone born in that month from every list and map, once their window has passed. Knocks already logged stay in the leaderboard and exports.
+      </div>
+      <select id="remove-month" value={month} onChange={(e) => { setMonth(e.target.value); setConfirming(false); setMsg(null) }}>
+        <option value="">Choose a month…</option>
+        {months.map(([ym, n]) => (
+          <option key={ym} value={ym}>
+            {label(ym)} · {n.toLocaleString()} leads
+          </option>
+        ))}
+      </select>
+      {month &&
+        (confirming ? (
+          <div className="card">
+            <b>
+              Remove {ids.length.toLocaleString()} leads born {label(month).replace('Born ', '').replace(/ \(.*/, '')}?
+            </b>
+            <div className="muted" style={{ fontSize: 14 }}>
+              {worked.toLocaleString()} of them have been worked. This can't be undone; re-importing the list would bring them back as new.
+            </div>
+            <div className="row">
+              <button className="btn danger" disabled={busy} onClick={remove}>
+                {busy ? 'Removing…' : `Remove ${ids.length.toLocaleString()} leads`}
+              </button>
+              <button className="btn" disabled={busy} onClick={() => setConfirming(false)}>Keep them</button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn danger" onClick={() => setConfirming(true)}>
+            Remove {ids.length.toLocaleString()} leads…
+          </button>
+        ))}
+      {msg && <div className="muted">{msg}</div>}
+    </div>
   )
 }

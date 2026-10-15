@@ -98,16 +98,19 @@ export function dispositionsCsv(acts: Activity[], members: Member[], leads: Map<
       .map((a) => {
         const l = leads.get(a.leadId)
         const d = new Date(a.createdAt)
+        // Removed lead: use the "First Last, Address, City" saved with the visit.
+        const [who = '', addr = '', town = ''] = l ? [] : a.leadLabel.split(',').map((x) => x.trim())
+        const [first, ...rest] = who.split(' ')
         return [
           d.toLocaleDateString('en-US'),
           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           name(a.memberId),
           STATUS[a.outcome].label,
           a.notes,
-          l?.firstName ?? '',
-          l?.lastName ?? '',
-          l?.address ?? '',
-          l?.city ?? '',
+          l ? l.firstName : first ?? '',
+          l ? l.lastName : rest.join(' '),
+          l ? l.address : addr,
+          l ? l.city : town,
           l?.zip ?? '',
           l?.county ?? '',
           listName(l?.listId),

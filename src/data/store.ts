@@ -20,6 +20,8 @@ export interface Snapshot {
   activities: Activity[]
   lists: LeadList[]
   error: string | null
+  /** Signed in with a temporary password a manager set up; must pick their own first. */
+  mustChangePassword?: boolean
 }
 
 export interface Store {
@@ -32,6 +34,8 @@ export interface Store {
   /** Live: email + password set up by a manager. */
   signInWithPassword?(email: string, password: string): Promise<void>
   changePassword?(password: string): Promise<void>
+  /** Replaces the temporary password from the setup script. */
+  setOwnPassword?(password: string): Promise<void>
   signOut(): Promise<void>
 
   history(leadId: string): Promise<Activity[]>
@@ -44,6 +48,10 @@ export interface Store {
   /** Adds leads to the list with this name, creating it if needed. */
   importList(name: string, leads: NewLead[]): Promise<void>
   deleteList(listId: string): Promise<void>
+  /** Managers: remove leads everywhere. Their door-knock history stays in reports. */
+  deleteLeads(ids: string[]): Promise<void>
+  /** False when the database still deletes history along with leads (needs the one-time update). */
+  canDeleteLeadsSafely(): Promise<boolean>
   /** Managers: fix addresses and/or map locations. */
   updateLeads(changes: LeadFix[]): Promise<void>
   setRole?(memberId: string, role: Role): Promise<void>
@@ -63,6 +71,20 @@ export function visibleLeads(s: Snapshot): Lead[] {
   if (!s.me) return []
   if (s.me.role === 'manager') return s.leads
   return s.leads.filter((l) => l.assignedTo === null || l.assignedTo === s.me!.id)
+}
+
+/** Usernames like "calebjurkonis" sign in as this hidden address; real emails work too. */
+export const USERNAME_DOMAIN = 'knockroute.example.com'
+
+export function loginEmail(input: string): string {
+  const v = input.trim().toLowerCase()
+  return v.includes('@') ? v : `${v.replace(/[^a-z0-9._-]/g, '')}@${USERNAME_DOMAIN}`
+}
+
+/** Name of the lead an activity was about, even if the lead was removed since. */
+export function activityLeadName(a: Activity, lead: Lead | undefined): string {
+  if (lead) return [lead.firstName, lead.lastName].filter(Boolean).join(' ')
+  return a.leadLabel.split(',')[0]?.trim() || 'a removed lead'
 }
 
 export function memberName(s: Snapshot, id: string | null | undefined): string {

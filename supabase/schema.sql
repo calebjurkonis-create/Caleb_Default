@@ -70,12 +70,13 @@ create index if not exists leads_assigned_idx on public.leads (assigned_to);
 -- ── Dispositions (every door knock / call) ──────────────────────────────────
 create table if not exists public.activities (
   id uuid primary key default gen_random_uuid(),
-  lead_id uuid not null references public.leads (id) on delete cascade,
+  lead_id uuid references public.leads (id) on delete set null, -- removed leads keep their history
   member_id uuid not null references public.profiles (id) default auth.uid(),
   channel text not null check (channel in ('door', 'phone')),
   outcome text not null check (outcome in
     ('no_answer', 'left_note', 'appointment', 'follow_up', 'not_interested', 'info_requested', 'bad_info')),
   notes text not null default '',
+  lead_label text not null default '', -- "First Last, Address, City", kept if the lead is removed
   created_at timestamptz not null default now()
 );
 create index if not exists activities_lead_idx on public.activities (lead_id, created_at desc);
@@ -138,7 +139,7 @@ create policy "managers manage leads" on public.leads for all to authenticated
 
 drop policy if exists "see activity on visible leads" on public.activities;
 create policy "see activity on visible leads" on public.activities for select to authenticated
-  using (exists (select 1 from public.leads l where l.id = lead_id));
+  using (lead_id is null or exists (select 1 from public.leads l where l.id = lead_id));
 drop policy if exists "log own activity" on public.activities;
 create policy "log own activity" on public.activities for insert to authenticated
   with check (member_id = auth.uid() and exists (select 1 from public.leads l where l.id = lead_id));
@@ -159,3 +160,43 @@ begin
     alter publication supabase_realtime add table public.profiles;
   end if;
 end $$;
+
+-- ── Later updates (also in supabase/updates/) ───────────────────────────────
+-- Street-level pins
+alter table public.leads add column if not exists pin_approx boolean not null default false;
+
+-- Each visit remembers who it was about, so history survives the lead being removed.
+alter table public.activities add column if not exists lead_label text not null default '';
+update public.activities a
+   set lead_label = trim(l.first_name || ' ' || l.last_name) || ', ' || l.address || ', ' || l.city
+  from public.leads l
+ where l.id = a.lead_id and a.lead_label = '';
+
+create or replace function public.label_activity() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  select trim(first_name || ' ' || last_name) || ', ' || address || ', ' || city
+    into new.lead_label
+    from public.leads where id = new.lead_id;
+  new.lead_label := coalesce(new.lead_label, '');
+  return new;
+end $$;
+
+drop trigger if exists before_activity_insert on public.activities;
+create trigger before_activity_insert before insert on public.activities
+  for each row execute function public.label_activity();
+
+-- Removing a lead now keeps its visits (unlinked) instead of deleting them.
+alter table public.activities alter column lead_id drop not null;
+alter table public.activities drop constraint if exists activities_lead_id_fkey;
+alter table public.activities add constraint activities_lead_id_fkey
+  foreign key (lead_id) references public.leads (id) on delete set null;
+
+drop policy if exists "see activity on visible leads" on public.activities;
+create policy "see activity on visible leads" on public.activities for select to authenticated
+  using (lead_id is null or exists (select 1 from public.leads l where l.id = lead_id));
+
+-- Lets the app check this update has been applied.
+create or replace function public.knockroute_version() returns int
+language sql stable as $$ select 2 $$;
+grant execute on function public.knockroute_version() to authenticated;

@@ -31,7 +31,8 @@ const toLead = (r: Row): Lead => ({
 
 const toActivity = (r: Row): Activity => ({
   id: r.id,
-  leadId: r.lead_id,
+  leadId: r.lead_id ?? '',
+  leadLabel: r.lead_label ?? '',
   memberId: r.member_id,
   channel: r.channel,
   outcome: r.outcome,
@@ -114,7 +115,13 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
     channel = sb
       .channel('team')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, (p) => {
-        if (p.eventType === 'DELETE') leads.delete((p.old as Row).id)
+        if (p.eventType === 'DELETE') {
+          const id = (p.old as Row).id
+          leads.delete(id)
+          if (snapshot.activities.some((a) => a.leadId === id)) {
+            emit({ activities: snapshot.activities.map((a) => (a.leadId === id ? { ...a, leadId: '' } : a)) })
+          }
+        }
         else leads.set((p.new as Row).id, toLead(p.new as Row))
         emitLeads()
       })
@@ -126,8 +133,9 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       .subscribe()
   }
 
-  async function onSession(id: string | null) {
+  async function onSession(id: string | null, tempPassword = false) {
     userId = id
+    emit({ mustChangePassword: !!id && tempPassword })
     if (!id) {
       channel?.unsubscribe()
       channel = null
@@ -139,10 +147,11 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
     subscribeLive()
   }
 
-  sb.auth.getSession().then(({ data }) => onSession(data.session?.user.id ?? null))
+  const isTemp = (u: { user_metadata?: Record<string, unknown> } | undefined) => u?.user_metadata?.temp_password === true
+  sb.auth.getSession().then(({ data }) => onSession(data.session?.user.id ?? null, isTemp(data.session?.user)))
   sb.auth.onAuthStateChange((_e, session) => {
     const id = session?.user.id ?? null
-    if (id !== userId) onSession(id)
+    if (id !== userId) onSession(id, isTemp(session?.user))
   })
 
   // Catch anything missed while the phone was asleep or a lead was reassigned away.
@@ -170,6 +179,11 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
     async signInWithPassword(email, password) {
       const { error } = await sb.auth.signInWithPassword({ email, password })
       if (error) throw error
+    },
+    async setOwnPassword(password) {
+      const { error } = await sb.auth.updateUser({ password, data: { temp_password: false } })
+      if (error) throw error
+      emit({ mustChangePassword: false })
     },
     async changePassword(password) {
       const { error } = await sb.auth.updateUser({ password })
@@ -266,6 +280,22 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         for (const r of inserted) leads.set(r.id, toLead(r))
         emitLeads()
       }
+    },
+    async deleteLeads(ids) {
+      for (let i = 0; i < ids.length; i += 150) {
+        check(await sb.from('leads').delete().in('id', ids.slice(i, i + 150)))
+      }
+      const gone = new Set(ids)
+      for (const id of ids) leads.delete(id)
+      emit({
+        leads: [...leads.values()],
+        activities: snapshot.activities.map((a) => (gone.has(a.leadId) ? { ...a, leadId: '' } : a)),
+      })
+    },
+    async canDeleteLeadsSafely() {
+      // Added by the one-time update that makes removed leads keep their history.
+      const { data, error } = await sb.rpc('knockroute_version')
+      return !error && Number(data) >= 2
     },
     async updateLeads(changes) {
       for (const c of changes) {

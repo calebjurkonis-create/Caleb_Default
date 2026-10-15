@@ -51,7 +51,10 @@ export interface Lead {
 
 export interface Activity {
   id: string
+  /** Empty once the lead itself has been removed; leadLabel keeps who it was. */
   leadId: string
+  /** "First Last, Address, City" captured when the visit was logged. */
+  leadLabel: string
   memberId: string
   channel: Channel
   outcome: Outcome

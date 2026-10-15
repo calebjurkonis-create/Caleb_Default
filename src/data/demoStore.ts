@@ -70,6 +70,10 @@ export function createDemoStore(): Store {
     commit(false)
   })
 
+  const labelFor = (leadId: string) => {
+    const l = data.leads.find((x) => x.id === leadId)
+    return l ? `${l.firstName} ${l.lastName}, ${l.address}, ${l.city}` : ''
+  }
   const record = (a: Activity) => {
     data.activities = [a, ...data.activities]
     data.leads = data.leads.map((l) =>
@@ -101,6 +105,7 @@ export function createDemoStore(): Store {
         record({
           id: uid(),
           leadId: lead.id,
+          leadLabel: labelFor(lead.id),
           memberId: who.id,
           channel: 'door',
           outcome,
@@ -136,7 +141,7 @@ export function createDemoStore(): Store {
     async logActivity(leadId, outcome, notes) {
       if (!data.meId) return
       if (outcome !== 'no_answer' && !notes.trim()) throw new Error('Add a note before submitting')
-      record({ id: uid(), leadId, memberId: data.meId, channel: 'door', outcome, notes, createdAt: new Date().toISOString() })
+      record({ id: uid(), leadId, leadLabel: labelFor(leadId), memberId: data.meId, channel: 'door', outcome, notes, createdAt: new Date().toISOString() })
       commit()
     },
     async activitiesBetween(from, to) {
@@ -179,6 +184,15 @@ export function createDemoStore(): Store {
         })),
       ]
       commit()
+    },
+    async deleteLeads(ids) {
+      const gone = new Set(ids)
+      data.leads = data.leads.filter((l) => !gone.has(l.id))
+      data.activities = data.activities.map((a) => (gone.has(a.leadId) ? { ...a, leadId: '' } : a))
+      commit()
+    },
+    async canDeleteLeadsSafely() {
+      return true
     },
     async updateLeads(changes) {
       const byId = new Map(changes.map((c) => [c.id, c]))

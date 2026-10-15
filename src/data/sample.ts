@@ -99,6 +99,7 @@ export function buildSample(now = new Date()): { leads: Lead[]; activities: Acti
           activities.push({
             id: `act-${n}-${t}`,
             leadId: lead.id,
+            leadLabel: `${lead.firstName} ${lead.lastName}, ${lead.address}, ${lead.city}`,
             memberId: member.id,
             channel: 'door',
             outcome,
