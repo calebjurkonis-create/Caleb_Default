@@ -160,11 +160,24 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
 
         {isManager && store.setRole && (
           <div className="section">
-            <h3 style={{ fontSize: 20 }}>Roles</h3>
+            <h3 style={{ fontSize: 20 }}>Team members</h3>
+            <div className="muted" style={{ fontSize: 14 }}>
+              Fix a name by typing over it. To add or remove someone, see “Adding and removing people” in the setup guide.
+            </div>
             <ul className="list">
               {snap.members.map((m) => (
                 <li key={m.id} className="switch">
-                  <span>{m.name}</span>
+                  <input
+                    id={`name-${m.id}`}
+                    type="text"
+                    defaultValue={m.name}
+                    aria-label="Name"
+                    style={{ flex: 1, minWidth: 0 }}
+                    onBlur={(e) => {
+                      const name = e.target.value.trim()
+                      if (name && name !== m.name) store.renameMember!(m.id, name)
+                    }}
+                  />
                   <select
                     id={`role-${m.id}`}
                     value={m.role}

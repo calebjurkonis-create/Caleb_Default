@@ -12,13 +12,14 @@ export function Login({ store, snap }: { store: Store; snap: Snapshot }) {
       </div>
       <p className="lede" style={{ margin: 0 }}>Plan the fastest route through your leads, and see every door your team knocks the moment it happens.</p>
       <div className="road" />
-      {store.mode === 'demo' ? <DemoLogin store={store} snap={snap} /> : <CodeLogin store={store} />}
+      {store.mode === 'demo' ? <DemoLogin store={store} snap={snap} /> : <PasswordLogin store={store} />}
     </main>
   )
 }
 
 function DemoLogin({ store, snap }: { store: Store; snap: Snapshot }) {
   const [who, setWho] = useState<string | null>(null)
+  const member = snap.members.find((m) => m.id === who)
   const go = (role: Role) => who && store.signInAs!(who, role)
   return (
     <div className="panel">
@@ -34,60 +35,53 @@ function DemoLogin({ store, snap }: { store: Store; snap: Snapshot }) {
         ))}
       </div>
       <div className="row">
-        <button className="btn primary" disabled={!who} onClick={() => go('agent')}>Sign in as agent</button>
-        <button className="btn" disabled={!who} onClick={() => go('manager')}>Sign in as manager</button>
+        <button className="btn primary" disabled={!member} onClick={() => go(member!.role)}>
+          {member ? `Sign in as ${member.name} (${member.role})` : 'Pick your name'}
+        </button>
+        {member?.role === 'manager' && (
+          <button className="btn" onClick={() => go('agent')}>See the agent view</button>
+        )}
       </div>
     </div>
   )
 }
 
-function CodeLogin({ store }: { store: Store }) {
+function PasswordLogin({ store }: { store: Store }) {
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  async function run(fn: () => Promise<void>) {
-    setBusy(true)
-    setError(null)
-    try {
-      await fn()
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <form
       className="panel"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault()
-        if (!sent) run(async () => { await store.requestCode!(email.trim()); setSent(true) })
-        else run(() => store.verifyCode!(email.trim(), code.trim()))
+        setBusy(true)
+        setError(null)
+        try {
+          await store.signInWithPassword!(email.trim(), password)
+        } catch (err) {
+          const msg = (err as Error).message
+          setError(/invalid login/i.test(msg) ? "That email and password don't match. Check with a manager if you're not sure." : msg)
+        } finally {
+          setBusy(false)
+        }
       }}
     >
       <label className="field">
-        Work email
-        <input id="login-email" type="email" autoComplete="email" required value={email} disabled={sent} onChange={(e) => setEmail(e.target.value)} />
+        Email
+        <input id="login-email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
       </label>
-      {sent && (
-        <label className="field">
-          6-digit code from your email
-          <input id="login-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
-        </label>
-      )}
-      {error && <div className="err">{error.includes('Signups not allowed') ? "That email isn't on the team yet. Ask a manager to invite you." : error}</div>}
+      <label className="field">
+        Password
+        <input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+      </label>
+      {error && <div className="err">{error}</div>}
       <button className="btn primary block" disabled={busy}>
-        {busy ? 'One moment…' : sent ? 'Sign in' : 'Email me a code'}
+        {busy ? 'Signing in…' : 'Sign in'}
       </button>
-      {sent && (
-        <button type="button" className="btn small" onClick={() => { setSent(false); setCode('') }}>
-          Use a different email
-        </button>
-      )}
+      <div className="muted" style={{ fontSize: 14 }}>No account yet? A manager sets you up.</div>
     </form>
   )
 }

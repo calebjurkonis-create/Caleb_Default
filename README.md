@@ -27,24 +27,24 @@ You need two free accounts. About 20 minutes total.
 
 1. Create a project at [supabase.com](https://supabase.com) (free tier is plenty for ~25 people).
 2. **SQL Editor → New query**: paste all of [`supabase/schema.sql`](supabase/schema.sql) and click **Run**.
-3. **Authentication → Sign In / Providers**: turn **off** "Allow new users to sign up" so only invited people get in.
-4. **Authentication → Emails → Magic Link** template: add the code to the email so people can sign in from the home-screen app:
-   ```html
-   <h2>Your KnockRoute code</h2>
-   <p>Enter this code in the app: <strong>{{ .Token }}</strong></p>
-   ```
-5. **Authentication → Users → Invite user** for each teammate.
-6. Make yourself a manager: **SQL Editor**, run
+3. **Authentication → Sign In / Providers**: turn **off** "Allow new users to sign up" so only people you add get in.
+4. **Authentication → Users → Add user → Create new user**: enter the person's email and a temporary password, and check **Auto Confirm User**. No email is sent; give them the password yourself. They can change it under **More** in the app.
+5. Make yourself a manager in **SQL Editor**:
    ```sql
    update profiles set role = 'manager' where id = (select id from auth.users where email = 'YOU@EXAMPLE.COM');
    ```
-   After that, managers can promote others from the **Team** tab. To fix how a name shows, edit the `name` column in **Table Editor → profiles**.
-7. **Project Settings → API**: copy the **Project URL** and the **anon public** key.
+   After that, everything else happens in the app's **Team** tab: set who's a manager and fix how names show.
+6. **Project Settings → API Keys** (or the **Connect** button at the top): copy the **Project URL** and the **anon / publishable** key.
+
+#### Adding and removing people later
+- **Add:** Authentication → Users → Add user → Create new user (step 4), then set their name and role in the app's Team tab.
+- **Remove:** Authentication → Users → click the person → **Delete user**. Their past dispositions stay in the history.
+- **Forgot password:** Authentication → Users → click the person → set a new password.
 
 ### 2. Vercel (hosting)
 
 1. Sign in at [vercel.com](https://vercel.com) with GitHub, **Add New → Project**, and import this repository.
-2. Under **Environment Variables** add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with the values from step 1.7.
+2. Under **Environment Variables** add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with the values from step 1.6.
 3. Deploy. Share the URL with the team; on iPhone: open in Safari → Share → **Add to Home Screen**.
 
 ## How it works

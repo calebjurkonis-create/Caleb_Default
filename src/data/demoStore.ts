@@ -19,7 +19,7 @@ interface Saved {
 function load(): Saved {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw) as Saved
+    if (raw) return { ...(JSON.parse(raw) as Saved), members: SAMPLE_MEMBERS }
   } catch {
     /* storage unavailable: fall through to fresh sample */
   }

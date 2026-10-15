@@ -19,9 +19,9 @@ export interface Store {
 
   /** Demo: pick a teammate. */
   signInAs?(memberId: string, role: Role): void
-  /** Live: email a 6-digit code, then verify it. */
-  requestCode?(email: string): Promise<void>
-  verifyCode?(email: string, code: string): Promise<void>
+  /** Live: email + password set up by a manager. */
+  signInWithPassword?(email: string, password: string): Promise<void>
+  changePassword?(password: string): Promise<void>
   signOut(): Promise<void>
 
   history(leadId: string): Promise<Activity[]>
@@ -31,6 +31,7 @@ export interface Store {
   importList(name: string, leads: NewLead[]): Promise<void>
   deleteList(listId: string): Promise<void>
   setRole?(memberId: string, role: Role): Promise<void>
+  renameMember?(memberId: string, name: string): Promise<void>
 
   /** Demo only. */
   resetDemo?(): void

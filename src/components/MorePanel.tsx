@@ -16,6 +16,8 @@ interface Props {
 export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellite, onClose }: Props) {
   const [sim, setSim] = useState(store.simulateTeam?.get() ?? false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [pwMsg, setPwMsg] = useState<string | null>(null)
   return (
     <section className="sheet full" aria-label="Settings">
       <header className="sheet-head">
@@ -74,6 +76,30 @@ export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellit
               <button className="btn" onClick={() => setConfirmReset(true)}>Start the demo over…</button>
             )}
           </div>
+        )}
+
+        {store.changePassword && (
+          <form
+            className="section"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              setPwMsg(null)
+              try {
+                await store.changePassword!(newPassword)
+                setNewPassword('')
+                setPwMsg('Password changed.')
+              } catch (err) {
+                setPwMsg((err as Error).message)
+              }
+            }}
+          >
+            <label className="field">
+              New password
+              <input id="new-password" type="password" autoComplete="new-password" minLength={6} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            </label>
+            {pwMsg && <div className="muted">{pwMsg}</div>}
+            <button className="btn">Change my password</button>
+          </form>
         )}
 
         <button className="btn block" onClick={() => store.signOut()}>

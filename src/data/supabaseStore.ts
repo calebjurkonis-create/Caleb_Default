@@ -152,11 +152,13 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       listeners.add(fn)
       return () => listeners.delete(fn)
     },
-    async requestCode(email) {
-      check(await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } }))
+    async signInWithPassword(email, password) {
+      const { error } = await sb.auth.signInWithPassword({ email, password })
+      if (error) throw error
     },
-    async verifyCode(email, code) {
-      check(await sb.auth.verifyOtp({ email, token: code, type: 'email' }))
+    async changePassword(password) {
+      const { error } = await sb.auth.updateUser({ password })
+      if (error) throw error
     },
     async signOut() {
       await sb.auth.signOut()
@@ -226,6 +228,10 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
     },
     async deleteList(listId) {
       check(await sb.from('lead_lists').delete().eq('id', listId))
+      await loadAll()
+    },
+    async renameMember(memberId, name) {
+      check(await sb.from('profiles').update({ name }).eq('id', memberId))
       await loadAll()
     },
     async setRole(memberId, role) {

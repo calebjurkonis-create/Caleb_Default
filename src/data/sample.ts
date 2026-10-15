@@ -2,14 +2,17 @@ import type { Activity, Channel, Lead, LeadList, Member, Outcome } from '../type
 
 /** Everyone on the office board, plus Christian and Nico. Demo only. */
 const TEAM = [
-  'Moose', 'Albert', 'Caleb', 'Johnny', 'Tina', 'Jad', 'Dari', 'Jessuel', 'Arham', 'Lauryn', 'Bati',
+  'Moose', 'Albert', 'Caleb', 'Johnny', 'Tina', 'Jad', 'Dari', 'Jesuel', 'Arban', 'Lauryn', 'Bati',
   'Justin', 'Haleigh', 'Luis', 'JA', 'Lis', 'John', 'Leo', 'Richard', 'Christian', 'Nico',
 ]
+const MANAGERS = new Set(['Caleb', 'Albert', 'Moose', 'Arban', 'Tina'])
+// Keeps ids from the first demo build so existing sample history still points at the right person.
+const LEGACY_IDS: Record<string, string> = { Jesuel: 'm-jessuel', Arban: 'm-arham' }
 
 export const SAMPLE_MEMBERS: Member[] = TEAM.map((name) => ({
-  id: `m-${name.toLowerCase()}`,
+  id: LEGACY_IDS[name] ?? `m-${name.toLowerCase()}`,
   name,
-  role: 'agent',
+  role: MANAGERS.has(name) ? 'manager' : 'agent',
 }))
 
 // Small seeded PRNG so the sample map looks the same on every phone.
