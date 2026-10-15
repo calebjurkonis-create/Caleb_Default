@@ -2,12 +2,14 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { POST as geocode } from './api/geocode'
 import { POST as geocodeFallback } from './api/geocode-fallback'
+import { POST as roads } from './api/roads'
 
 // Serves /api/geocode during `npm run dev`, the same way Vercel serves it in production.
 function localApi(): Plugin {
   const routes: Record<string, (r: Request) => Promise<Response>> = {
     '/api/geocode': geocode,
     '/api/geocode-fallback': geocodeFallback,
+    '/api/roads': roads,
   }
   return {
     name: 'local-api',

@@ -6,8 +6,6 @@ import type { Point } from './route'
  * or missing key it returns null and the app keeps its straight-line behavior.
  */
 
-const API = 'https://api.openrouteservice.org'
-
 /**
  * The office's OpenRouteService key, built in so routing works with no setup.
  * A manager can replace it (or turn routing off) under More → Road routing.
@@ -32,14 +30,15 @@ export interface RoadPath {
   minutes: number
 }
 
-async function call<T>(key: string, path: string, body: unknown): Promise<T | null> {
+/** Goes through our /api/roads function so the phone never calls OpenRouteService directly. */
+async function call<T>(key: string, kind: 'optimize' | 'directions', body: unknown): Promise<T | null> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
   try {
-    const res = await fetch(`${API}${path}`, {
+    const res = await fetch('/api/roads', {
       method: 'POST',
-      headers: { Authorization: key, 'Content-Type': 'application/json', Accept: 'application/json, application/geo+json' },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, key, body }),
       signal: ctrl.signal,
     })
     if (!res.ok) return null
@@ -61,7 +60,7 @@ export async function orderByRoads<T extends Point & { id: string }>(key: string
     jobs: stops.map((s, i) => ({ id: i + 1, location: [s.lng, s.lat] })),
     vehicles: [{ id: 1, profile: 'driving-car', start: [start.lng, start.lat] }],
   }
-  const res = await call<{ routes?: { steps: { type: string; job?: number }[] }[]; unassigned?: unknown[] }>(key, '/optimization', body)
+  const res = await call<{ routes?: { steps: { type: string; job?: number }[] }[]; unassigned?: unknown[] }>(key, 'optimize', body)
   const steps = res?.routes?.[0]?.steps
   if (!steps || (res?.unassigned && (res.unassigned as unknown[]).length)) return null
   const ids = steps.filter((s) => s.type === 'job' && s.job != null).map((s) => stops[s.job! - 1]?.id)
@@ -81,7 +80,7 @@ export async function roadPath(key: string, points: Point[]): Promise<RoadPath |
     const chunk = points.slice(i, i + MAX_POINTS)
     const res = await call<{
       features?: { geometry: { coordinates: [number, number][] }; properties: { summary?: { distance?: number; duration?: number } } }[]
-    }>(key, '/v2/directions/driving-car/geojson', { coordinates: chunk.map((p) => [p.lng, p.lat]) })
+    }>(key, 'directions', { coordinates: chunk.map((p) => [p.lng, p.lat]) })
     const f = res?.features?.[0]
     if (!f?.geometry?.coordinates?.length) return null
     for (const [lng, lat] of f.geometry.coordinates) line.push([lat, lng])
