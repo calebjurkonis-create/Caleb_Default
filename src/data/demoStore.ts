@@ -4,7 +4,6 @@ import { activeClaim } from '../lib/leads'
 import { buildSample, sampleNote, SAMPLE_MEMBERS } from './sample'
 import type { Snapshot, Store } from './store'
 
-const KEY = 'knockroute-demo-v3'
 const SIM_KEY = 'knockroute-demo-sim'
 
 interface Saved {
@@ -16,24 +15,38 @@ interface Saved {
   lists: LeadList[]
 }
 
-function load(): Saved {
-  try {
-    const raw = localStorage.getItem(KEY)
-    if (raw) return { ...(JSON.parse(raw) as Saved), members: SAMPLE_MEMBERS }
-  } catch {
-    /* storage unavailable: fall through to fresh sample */
-  }
-  return { meId: null, role: 'agent', members: SAMPLE_MEMBERS, ...buildSample() }
-}
-
 const uid = () => Math.random().toString(36).slice(2, 10)
 
+export interface DemoOptions {
+  /**
+   * A guest trial (the /demo link): signed in as this person as a manager, starting
+   * empty (no sample leads, no simulated teammates), saved under its own key.
+   */
+  guestName?: string
+}
+
 /**
- * Demo mode: sample data kept in this browser. Other tabs on the same device stay
- * in sync, and simulated teammates log a disposition now and then so you can see
- * the live map update.
+ * Demo mode: data kept in this browser only. The team demo has sample leads and
+ * simulated teammates; the guest demo starts empty for someone to try with their own list.
  */
-export function createDemoStore(): Store {
+export function createDemoStore(opts: DemoOptions = {}): Store {
+  const guest = opts.guestName
+  const KEY = guest ? 'knockroute-guest-v1' : 'knockroute-demo-v3'
+  const MEMBERS: Member[] = guest ? [{ id: 'm-guest', name: guest, role: 'manager' }] : SAMPLE_MEMBERS
+  const fresh = (): Saved =>
+    guest
+      ? { meId: 'm-guest', role: 'manager', members: MEMBERS, leads: [], activities: [], lists: [] }
+      : { meId: null, role: 'agent', members: MEMBERS, ...buildSample() }
+  const load = (): Saved => {
+    try {
+      const raw = localStorage.getItem(KEY)
+      if (raw) return { ...(JSON.parse(raw) as Saved), members: MEMBERS }
+    } catch {
+      /* storage unavailable: start fresh */
+    }
+    return fresh()
+  }
+
   let data = load()
   let snapshot: Snapshot
   const listeners = new Set<() => void>()
@@ -117,7 +130,7 @@ export function createDemoStore(): Store {
     }
     setTimeout(tick, 35_000 + Math.random() * 40_000)
   }
-  setTimeout(tick, 20_000)
+  if (!guest) setTimeout(tick, 20_000)
 
   return {
     mode: 'demo',
@@ -227,10 +240,10 @@ export function createDemoStore(): Store {
     },
     resetDemo() {
       const { meId, role } = data
-      data = { meId, role, members: SAMPLE_MEMBERS, ...buildSample() }
+      data = { ...fresh(), meId: meId ?? fresh().meId, role }
       commit()
     },
-    simulateTeam: {
+    simulateTeam: guest ? undefined : {
       get: () => simOn,
       set(on) {
         simOn = on

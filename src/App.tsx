@@ -146,6 +146,14 @@ function Field({ store }: { store: Store }) {
   )
   const openLead = openId ? byId.get(openId) ?? null : null
 
+  // No leads yet (a fresh demo or a brand-new office): start the map where the person is.
+  const centeredOnMe = useRef(false)
+  useEffect(() => {
+    if (centeredOnMe.current || !here || visible.length || !mapRef.current) return
+    centeredOnMe.current = true
+    mapRef.current.flyTo(here, 12)
+  }, [here, visible.length])
+
   // Frame all leads the first time the map has data.
   useEffect(() => {
     if (didFit.current || !mapRef.current) return
@@ -405,6 +413,21 @@ function Field({ store }: { store: Store }) {
         </div>
 
         {drawing && <div className="draw-hint">Drag a loop around the houses</div>}
+        {snap.ready && visible.length === 0 && tab === 'map' && !openLead && !importing && (
+          <div className="banner">
+            <h3>No leads on the map yet</h3>
+            <div className="muted">
+              {isManager ? 'Add a list: Team → Import a spreadsheet (.xlsx or .csv).' : 'Your manager will add a lead list. Check back soon.'}
+            </div>
+            {isManager && (
+              <div className="row">
+                <button className="btn route" onClick={() => { setTab('team'); setImporting(true) }}>
+                  <Icon name="upload" /> Import a spreadsheet
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {placingId && (
           <div className="banner">
             <div className="banner-row">
@@ -454,7 +477,7 @@ function Field({ store }: { store: Store }) {
           </div>
         )}
 
-        {!drawing && !placingId && selection.size === 0 && !openLead && tab === 'map' && (
+        {!drawing && !placingId && selection.size === 0 && !openLead && tab === 'map' && visible.length > 0 && (
           <div className="legend" role="group" aria-label="Show or hide pins by disposition">
             <span className="legend-hint">Tap to show/hide</span>
             {STATUS_ORDER.map((s) => (

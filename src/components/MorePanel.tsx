@@ -66,6 +66,7 @@ export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellit
         {store.mode === 'demo' && (
           <div className="section">
             <h3 style={{ fontSize: 20 }}>Demo</h3>
+            {store.simulateTeam && (
             <label className="switch">
               <span>Simulate teammates logging visits</span>
               <input
@@ -78,9 +79,10 @@ export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellit
                 }}
               />
             </label>
+            )}
             {confirmReset ? (
               <div className="row">
-                <button className="btn danger" onClick={() => { store.resetDemo!(); setConfirmReset(false) }}>Reset sample data</button>
+                <button className="btn danger" onClick={() => { store.resetDemo!(); setConfirmReset(false) }}>Erase everything in this demo</button>
                 <button className="btn" onClick={() => setConfirmReset(false)}>Cancel</button>
               </div>
             ) : (
