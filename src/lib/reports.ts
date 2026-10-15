@@ -45,8 +45,26 @@ export interface AgentRow {
   followUps: number
   notInterested: number
   noAnswer: number
-  /** Appointments per door knocked, 0–1. */
-  rate: number
+  /** Good outcomes when someone answers: appointments + follow-ups. */
+  positive: number
+  /** Bad outcome when someone answers: not interested. */
+  negative: number
+  /** Sort key for positive : negative (no-answers don't count either way). */
+  ratio: number
+}
+
+/** "5 : 2" style, or a dash when nobody answered. */
+export function ratioLabel(r: Pick<AgentRow, 'positive' | 'negative'>): string {
+  return r.positive || r.negative ? `${r.positive} : ${r.negative}` : '–'
+}
+
+/**
+ * Positives per negative, with zero negatives counted as one so a single lucky door
+ * (1 : 0) doesn't outrank steady results (6 : 1). Nobody answered = bottom.
+ */
+function ratioKey(positive: number, negative: number): number {
+  if (!positive && !negative) return -1
+  return positive / Math.max(negative, 1)
 }
 
 export function agentRows(acts: Activity[], members: Member[]): AgentRow[] {
@@ -54,7 +72,7 @@ export function agentRows(acts: Activity[], members: Member[]): AgentRow[] {
   const row = (id: string) => {
     let r = rows.get(id)
     if (!r) {
-      r = { id, name: members.find((m) => m.id === id)?.name || 'Former teammate', doors: 0, appts: 0, followUps: 0, notInterested: 0, noAnswer: 0, rate: 0 }
+      r = { id, name: members.find((m) => m.id === id)?.name || 'Former teammate', doors: 0, appts: 0, followUps: 0, notInterested: 0, noAnswer: 0, positive: 0, negative: 0, ratio: -1 }
       rows.set(id, r)
     }
     return r
@@ -68,7 +86,11 @@ export function agentRows(acts: Activity[], members: Member[]): AgentRow[] {
     else if (a.outcome === 'not_interested') r.notInterested++
     else if (a.outcome === 'no_answer') r.noAnswer++
   }
-  for (const r of rows.values()) r.rate = r.doors ? r.appts / r.doors : 0
+  for (const r of rows.values()) {
+    r.positive = r.appts + r.followUps
+    r.negative = r.notInterested
+    r.ratio = ratioKey(r.positive, r.negative)
+  }
   return [...rows.values()]
 }
 
@@ -83,8 +105,8 @@ function csv(rows: (string | number)[][]): string {
 
 export function leaderboardCsv(rows: AgentRow[]): string {
   return csv([
-    ['Agent', 'Doors knocked', 'Appointments', 'Follow-ups', 'Not interested', 'No answer/Not home', 'Appointment rate'],
-    ...rows.map((r) => [r.name, r.doors, r.appts, r.followUps, r.notInterested, r.noAnswer, r.doors ? `${(r.rate * 100).toFixed(1)}%` : '']),
+    ['Agent', 'Doors knocked', 'Appointments', 'Follow-ups', 'Not interested', 'No answer/Not home', 'Positive (Appts + F/U)', 'Negative (Not interested)', '+/- ratio'],
+    ...rows.map((r) => [r.name, r.doors, r.appts, r.followUps, r.notInterested, r.noAnswer, r.positive, r.negative, r.positive || r.negative ? `${r.positive}:${r.negative}` : '']),
   ])
 }
 

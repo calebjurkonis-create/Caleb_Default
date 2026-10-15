@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { activityLeadName, memberName, type Snapshot, type Store } from '../data/store'
 import { STATUS } from '../lib/dispositions'
 import { clockTime, isToday, shortName, timeAgo } from '../lib/leads'
-import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, saveFile, type AgentRow, type Period } from '../lib/reports'
+import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, ratioLabel, saveFile, type AgentRow, type Period } from '../lib/reports'
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
@@ -15,13 +15,14 @@ interface Props {
   onImport(): void
 }
 
-type SortKey = 'appts' | 'doors' | 'followUps' | 'rate'
+type SortKey = 'appts' | 'doors' | 'followUps' | 'notInterested' | 'ratio'
 
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'doors', label: 'Doors' },
-  { key: 'appts', label: 'Appts' },
-  { key: 'followUps', label: 'F/U' },
-  { key: 'rate', label: 'Appt %' },
+const COLUMNS: { key: SortKey; label: string; title: string }[] = [
+  { key: 'doors', label: 'DKs', title: 'Doors knocked' },
+  { key: 'appts', label: 'Appt', title: 'Appointments' },
+  { key: 'followUps', label: 'F/U', title: 'Follow-ups' },
+  { key: 'notInterested', label: 'NI', title: 'Not interested' },
+  { key: 'ratio', label: '+/−', title: 'Appointments + follow-ups against not interested' },
 ]
 
 export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props) {
@@ -163,7 +164,7 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
                     <th>Agent</th>
                     {COLUMNS.map((c) => (
                       <th key={c.key}>
-                        <button className={`sort${sortKey === c.key ? ' on' : ''}`} onClick={() => setSortKey(c.key)} aria-pressed={sortKey === c.key}>
+                        <button className={`sort${sortKey === c.key ? ' on' : ''}`} onClick={() => setSortKey(c.key)} aria-pressed={sortKey === c.key} title={c.title}>
                           {c.label}
                         </button>
                       </th>
@@ -177,14 +178,17 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
                       <td>{r.doors}</td>
                       <td>{r.appts}</td>
                       <td>{r.followUps}</td>
-                      <td>{r.doors ? `${Math.round(r.rate * 100)}%` : '–'}</td>
+                      <td>{r.notInterested}</td>
+                      <td className="ratio">{ratioLabel(r)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <div className="muted" style={{ fontSize: 13 }}>Tap a column to rank by it. F/U = follow-ups.</div>
+          <div className="muted" style={{ fontSize: 13 }}>
+            Tap a column to rank by it. DKs = doors knocked · F/U = follow-ups · NI = not interested · +/− = appointments + follow-ups : not interested (only doors that were answered).
+          </div>
           {isManager && acts && (
             <div className="row">
               <button className="btn small" onClick={() => exportCsv('board')} disabled={!acts.length}>
