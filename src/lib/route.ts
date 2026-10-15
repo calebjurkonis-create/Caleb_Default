@@ -73,7 +73,14 @@ export function routeEstimate(start: Point, stops: Point[]): { miles: number; dr
 
 export type NavApp = 'apple' | 'google' | 'waze'
 
-export function navUrl(app: NavApp, to: Point): string {
+/** A street address (for street-level pins, so the maps app finds the house itself) or exact coordinates. */
+export function navUrl(app: NavApp, to: Point | string): string {
+  if (typeof to === 'string') {
+    const q = encodeURIComponent(to)
+    if (app === 'apple') return `https://maps.apple.com/?daddr=${q}&dirflg=d`
+    if (app === 'waze') return `https://waze.com/ul?q=${q}&navigate=yes`
+    return `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`
+  }
   const ll = `${to.lat},${to.lng}`
   if (app === 'apple') return `https://maps.apple.com/?daddr=${ll}&dirflg=d`
   if (app === 'waze') return `https://waze.com/ul?ll=${ll}&navigate=yes`

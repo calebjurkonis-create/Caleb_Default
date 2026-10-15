@@ -266,7 +266,7 @@ function Field({ store }: { store: Store }) {
                   const id = placingId
                   setPlacingId(null)
                   try {
-                    await store.updateLeads([{ id, lat: p.lat, lng: p.lng }])
+                    await store.updateLeads([{ id, lat: p.lat, lng: p.lng, pinApprox: false }])
                     flash('Pin placed')
                   } catch (e) {
                     flash(`Couldn't save the pin: ${(e as Error).message}`)

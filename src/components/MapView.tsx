@@ -121,11 +121,14 @@ export function MapView(props: Props) {
       const sel = props.selected.has(lead.id)
       const focus = props.focusId === lead.id
       const faded = props.claimedByOthers.has(lead.id)
+      // Street-level pins: hollow with a dashed ring in the status color.
+      const ring = lead.pinApprox && !focus && !sel
       const style = {
-        color: focus || sel ? '#10202e' : '#ffffff',
-        weight: focus ? 4 : sel ? 3 : far ? 1 : 2,
+        color: ring ? c : focus || sel ? '#10202e' : '#ffffff',
+        weight: ring ? (far ? 1.5 : 2.5) : focus ? 4 : sel ? 3 : far ? 1 : 2,
+        dashArray: ring ? (far ? '2 2' : '3 3') : undefined,
         fillColor: c,
-        fillOpacity: faded ? 0.35 : 1,
+        fillOpacity: ring ? 0.25 : faded ? 0.35 : 1,
         opacity: faded ? 0.6 : 1,
       }
       const radius = focus ? 11 : sel ? 9 : far ? 4 : 7

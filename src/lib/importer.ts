@@ -83,6 +83,7 @@ export function toLeads(sheet: Sheet, mapping: Mapping): NewLead[] {
       dob: get(row, 'dob').replace(/\D/g, '').slice(0, 6),
       lat: null,
       lng: null,
+      pinApprox: false,
       assignedTo: null,
     }))
     .filter((l) => l.address && (l.firstName || l.lastName))

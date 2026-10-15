@@ -19,6 +19,7 @@ const toLead = (r: Row): Lead => ({
   dob: r.dob,
   lat: r.lat,
   lng: r.lng,
+  pinApprox: !!r.pin_approx,
   status: r.status as LeadStatus,
   attempts: r.attempts,
   lastActivityAt: r.last_activity_at,
@@ -64,6 +65,9 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
   let leads = new Map<string, Lead>()
   let channel: ReturnType<SupabaseClient['channel']> | null = null
   let userId: string | null = null
+  // Databases set up before street-level pins existed lack this column; work without it.
+  let approxColumn = true
+  const missingApproxColumn = (e: unknown) => /pin_approx/.test(String((e as { message?: string })?.message ?? e))
 
   const emit = (patch: Partial<Snapshot>) => {
     snapshot = { ...snapshot, ...patch }
@@ -181,7 +185,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       return rows.map(toActivity)
     },
     async logActivity(leadId, outcome, notes) {
-      if (!notes.trim()) throw new Error('Add a note before submitting')
+      if (outcome !== 'no_answer' && !notes.trim()) throw new Error('Add a note before submitting')
       const row = check<Row>(
         await sb.from('activities').insert({ lead_id: leadId, channel: 'door', outcome, notes }).select().single(),
       )
@@ -226,29 +230,39 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         emit({ lists: [list, ...snapshot.lists] })
       }
       for (let i = 0; i < rows.length; i += 500) {
-        const inserted = check<Row[]>(
-          await sb
-            .from('leads')
-            .insert(
-              rows.slice(i, i + 500).map((l) => ({
-                list_id: list!.id,
-                prefix: l.prefix,
-                first_name: l.firstName,
-                last_name: l.lastName,
-                address: l.address,
-                city: l.city,
-                state: l.state,
-                zip: l.zip,
-                county: l.county,
-                phone: l.phone,
-                dob: l.dob,
-                lat: l.lat,
-                lng: l.lng,
-                assigned_to: l.assignedTo,
-              })),
-            )
-            .select(),
-        )
+        const insertBatch = async () =>
+          check<Row[]>(
+            await sb
+              .from('leads')
+              .insert(
+                rows.slice(i, i + 500).map((l) => ({
+                  list_id: list!.id,
+                  prefix: l.prefix,
+                  first_name: l.firstName,
+                  last_name: l.lastName,
+                  address: l.address,
+                  city: l.city,
+                  state: l.state,
+                  zip: l.zip,
+                  county: l.county,
+                  phone: l.phone,
+                  dob: l.dob,
+                  lat: l.lat,
+                  lng: l.lng,
+                  ...(approxColumn ? { pin_approx: l.pinApprox } : {}),
+                  assigned_to: l.assignedTo,
+                })),
+              )
+              .select(),
+          )
+        let inserted: Row[]
+        try {
+          inserted = await insertBatch()
+        } catch (e) {
+          if (!approxColumn || !missingApproxColumn(e)) throw e
+          approxColumn = false
+          inserted = await insertBatch()
+        }
         for (const r of inserted) leads.set(r.id, toLead(r))
         emitLeads()
       }
@@ -261,7 +275,15 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         if (c.zip !== undefined) row.zip = c.zip
         if (c.lat !== undefined) row.lat = c.lat
         if (c.lng !== undefined) row.lng = c.lng
-        check(await sb.from('leads').update(row).eq('id', c.id))
+        if (c.pinApprox !== undefined && approxColumn) row.pin_approx = c.pinApprox
+        try {
+          check(await sb.from('leads').update(row).eq('id', c.id))
+        } catch (e) {
+          if (!('pin_approx' in row) || !missingApproxColumn(e)) throw e
+          approxColumn = false
+          delete row.pin_approx
+          check(await sb.from('leads').update(row).eq('id', c.id))
+        }
         const l = leads.get(c.id)
         if (l) {
           const { id: _id, ...patch } = c

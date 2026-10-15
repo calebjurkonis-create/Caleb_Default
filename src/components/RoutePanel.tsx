@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { STATUS } from '../lib/dispositions'
-import { cityLine, shortName } from '../lib/leads'
+import { cityLine, houseNumberOf, navTarget, shortName } from '../lib/leads'
 import { googleRouteLegs, navUrl, routeEstimate, type NavApp, type Point } from '../lib/route'
 import type { Lead } from '../types'
 import { Icon } from './Icon'
@@ -85,8 +85,9 @@ export function RoutePanel(p: Props) {
                   {next.address}
                   <div className="muted">{cityLine(next)}</div>
                 </div>
+                {next.pinApprox && <div className="tag warn" style={{ alignSelf: 'flex-start' }}>Pin is on the street · look for house #{houseNumberOf(next) || '?'}</div>}
                 <div className="row">
-                  <a className="btn primary" href={navUrl(p.navApp, { lat: next.lat!, lng: next.lng! })} target="_blank" rel="noreferrer">
+                  <a className="btn primary" href={navUrl(p.navApp, navTarget(next))} target="_blank" rel="noreferrer">
                     <Icon name="nav" /> Navigate
                   </a>
                   <button className="btn route" onClick={() => p.onOpenLead(next)}>
@@ -121,7 +122,7 @@ export function RoutePanel(p: Props) {
                     <div style={{ minWidth: 0 }}>
                       <button className="lead-row" style={{ padding: 0, display: 'block' }} onClick={() => p.onOpenLead(s)}>
                         <div className="name">{shortName(s)}</div>
-                        <div className="sub">{s.address}, {s.city}</div>
+                        <div className="sub">{s.address}, {s.city}{s.pinApprox ? ' · street pin' : ''}</div>
                       </button>
                       <div className="actions">
                         <span className="status">

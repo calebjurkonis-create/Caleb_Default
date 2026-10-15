@@ -10,6 +10,20 @@ export interface GeocodeResult {
   id: string
   lat: number | null
   lng: number | null
+  /** Street-level only: the house itself wasn't found. */
+  approx?: boolean
+}
+
+/**
+ * Street-level pins for houses on the same street would sit on one spot. Nudge each
+ * about 10–20 m apart so every pin can be tapped, keeping the spread small.
+ */
+export function spreadStreetPin(id: string, lat: number, lng: number): { lat: number; lng: number } {
+  let h = 0
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  const angle = (h % 360) * (Math.PI / 180)
+  const dist = 0.0001 + ((h >>> 9) % 60) * 0.000001
+  return { lat: lat + Math.sin(angle) * dist, lng: lng + Math.cos(angle) * dist }
 }
 
 const BATCH = 250

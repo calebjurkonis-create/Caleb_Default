@@ -8,6 +8,7 @@ export interface LeadFix {
   zip?: string
   lat?: number | null
   lng?: number | null
+  pinApprox?: boolean
 }
 
 export interface Snapshot {
@@ -34,7 +35,7 @@ export interface Store {
   signOut(): Promise<void>
 
   history(leadId: string): Promise<Activity[]>
-  /** Logs a door knock. Notes are required. */
+  /** Logs a door knock. Notes are required except for No Answer/Not Home. */
   logActivity(leadId: string, outcome: Outcome, notes: string): Promise<void>
   /** Every disposition the viewer can see between two times, newest first (for reports). */
   activitiesBetween(from: Date, to: Date): Promise<Activity[]>

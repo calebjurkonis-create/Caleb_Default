@@ -65,3 +65,13 @@ export function isToday(iso: string, now = new Date()): boolean {
   const d = new Date(iso)
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
 }
+
+/** Where Navigate should go: exact coordinates, or the full address when the pin only marks the street. */
+export function navTarget(l: Lead): { lat: number; lng: number } | string {
+  if (l.pinApprox || l.lat == null || l.lng == null) return `${l.address}, ${l.city}, ${l.state} ${l.zip}`
+  return { lat: l.lat, lng: l.lng }
+}
+
+export function houseNumberOf(l: Pick<Lead, 'address'>): string {
+  return /^\s*(\d+[A-Za-z]?)\b/.exec(l.address)?.[1] ?? ''
+}

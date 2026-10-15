@@ -135,7 +135,7 @@ export function createDemoStore(): Store {
     },
     async logActivity(leadId, outcome, notes) {
       if (!data.meId) return
-      if (!notes.trim()) throw new Error('Add a note before submitting')
+      if (outcome !== 'no_answer' && !notes.trim()) throw new Error('Add a note before submitting')
       record({ id: uid(), leadId, memberId: data.meId, channel: 'door', outcome, notes, createdAt: new Date().toISOString() })
       commit()
     },

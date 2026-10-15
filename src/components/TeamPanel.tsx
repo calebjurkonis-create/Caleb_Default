@@ -5,7 +5,7 @@ import { clockTime, isToday, shortName, timeAgo } from '../lib/leads'
 import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, saveFile, type AgentRow, type Period } from '../lib/reports'
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
-import { geocodeAll, geocodeFallback } from '../lib/geocode'
+import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 
 interface Props {
   store: Store
@@ -45,12 +45,23 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
       const still = input.filter((i) => !found.some((f) => f.id === i.id))
       const second = await geocodeFallback(still, (d, t) => setRetry({ listId, busy: true, text: `Second try: ${d} of ${t}…` }))
       found.push(...second.filter((r) => r.lat != null))
-      if (found.length) await store.updateLeads(found.map((r) => ({ id: r.id, lat: r.lat, lng: r.lng })))
+      if (found.length) {
+        await store.updateLeads(
+          found.map((r) => {
+            const pos = r.approx ? spreadStreetPin(r.id, r.lat!, r.lng!) : { lat: r.lat!, lng: r.lng! }
+            return { id: r.id, ...pos, pinApprox: !!r.approx }
+          }),
+        )
+      }
+      const onStreet = found.filter((r) => r.approx).length
       const left = missing.length - found.length
       setRetry({
         listId,
         busy: false,
-        text: `Found ${found.length} of ${missing.length}.` + (left ? ` ${left} still need a fix: Leads tab → “No pin”.` : ''),
+        text:
+          `Found ${found.length} of ${missing.length}` +
+          (onStreet ? ` (${onStreet} pinned on their street).` : '.') +
+          (left ? ` ${left} still need a fix: Leads tab → “No pin”.` : ''),
       })
     } catch (e) {
       setRetry({ listId, busy: false, text: `Couldn't finish: ${(e as Error).message}` })

@@ -84,6 +84,7 @@ export function buildSample(now = new Date()): { leads: Lead[]; activities: Acti
         attempts: 0,
         lastActivityAt: null,
         lastActivityBy: null,
+        pinApprox: false,
         assignedTo: null,
         claimedBy: null,
         claimedAt: null,

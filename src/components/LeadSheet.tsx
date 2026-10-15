@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { memberName, type Snapshot, type Store } from '../data/store'
 import { OUTCOMES, STATUS } from '../lib/dispositions'
-import { activeClaim, cityLine, clockTime, formatPhone, fullName, timeAgo, turning65 } from '../lib/leads'
+import { activeClaim, cityLine, clockTime, formatPhone, fullName, houseNumberOf, navTarget, timeAgo, turning65 } from '../lib/leads'
 import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead, Outcome } from '../types'
 import { Icon } from './Icon'
-import { geocodeAll, geocodeFallback } from '../lib/geocode'
+import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 
 interface Props {
   store: Store
@@ -47,7 +47,9 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
   const isManager = snap.me?.role === 'manager'
   const hasPoint = lead.lat != null && lead.lng != null
 
-  const noteMissing = !notes.trim()
+  // Every disposition needs a note except No Answer/Not Home.
+  const noteRequired = outcome !== 'no_answer'
+  const noteMissing = noteRequired && !notes.trim()
 
   async function save() {
     if (!outcome || noteMissing) return
@@ -124,11 +126,14 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           {claim && <span className="tag warn">{claim === snap.me?.id ? 'On your route today' : `On ${memberName(snap, claim)}'s route today`}</span>}
           {lead.attempts > 0 && <span className="tag">{lead.attempts} attempt{lead.attempts === 1 ? '' : 's'}</span>}
           {!hasPoint && <span className="tag warn">Address not found on map</span>}
+          {hasPoint && lead.pinApprox && (
+            <span className="tag warn">Pin is on the street · look for house #{houseNumberOf(lead) || '?'}</span>
+          )}
         </div>
 
         <div className="row">
           {hasPoint && (
-            <a className="btn primary" href={navUrl(navApp, { lat: lead.lat!, lng: lead.lng! })} target="_blank" rel="noreferrer">
+            <a className="btn primary" href={navUrl(navApp, navTarget(lead))} target="_blank" rel="noreferrer">
               <Icon name="nav" /> Navigate
             </a>
           )}
@@ -150,13 +155,13 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
             ))}
           </div>
           <label className="field">
-            Notes (required)
+            {outcome === 'no_answer' ? 'Notes (optional)' : 'Notes (required)'}
             <textarea
               id={`notes-${lead.id}`}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="What happened? Best time to come back?"
-              required
+              required={noteRequired}
             />
           </label>
           {error && <div className="err">{error}</div>}
@@ -251,9 +256,14 @@ function PinTools({ store, lead, onPlacePin }: { store: Store; lead: Lead; onPla
       let [hit] = await geocodeAll(input, () => {})
       if (hit?.lat == null) [hit] = await geocodeFallback(input)
       const changed = fix.address !== lead.address || fix.city !== lead.city || fix.zip !== lead.zip
-      if (hit?.lat != null) {
-        await store.updateLeads([{ id: lead.id, ...fix, lat: hit.lat, lng: hit.lng }])
-        setMsg('Found it. The pin is on the map.')
+      if (hit?.lat != null && hit.lng != null) {
+        const pos = hit.approx ? spreadStreetPin(lead.id, hit.lat, hit.lng) : { lat: hit.lat, lng: hit.lng }
+        await store.updateLeads([{ id: lead.id, ...fix, ...pos, pinApprox: !!hit.approx }])
+        setMsg(
+          hit.approx
+            ? "The house isn't on the map services yet, so the pin is on its street. Use “Move pin” to put it on the exact house."
+            : 'Found it. The pin is on the map.',
+        )
         setEditing(false)
       } else {
         if (changed) await store.updateLeads([{ id: lead.id, ...fix }])

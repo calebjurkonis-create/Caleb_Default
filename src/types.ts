@@ -36,6 +36,8 @@ export interface Lead {
   dob: string
   lat: number | null
   lng: number | null
+  /** True when the pin marks the street, not the exact house (new builds the map services don't know yet). */
+  pinApprox: boolean
   status: LeadStatus
   attempts: number
   lastActivityAt: string | null

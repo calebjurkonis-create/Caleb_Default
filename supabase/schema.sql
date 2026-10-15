@@ -62,6 +62,8 @@ create table if not exists public.leads (
   claimed_at timestamptz,
   created_at timestamptz not null default now()
 );
+-- Pin marks the street, not the exact house (new builds the map services don't know yet).
+alter table public.leads add column if not exists pin_approx boolean not null default false;
 create index if not exists leads_list_idx on public.leads (list_id);
 create index if not exists leads_assigned_idx on public.leads (assigned_to);
 

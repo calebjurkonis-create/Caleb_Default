@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Snapshot, Store } from '../data/store'
-import { geocodeAll, geocodeFallback } from '../lib/geocode'
+import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 import { FIELDS, guessMapping, missingRequired, readSheet, splitDuplicates, toLeads, type Mapping, type Sheet } from '../lib/importer'
 import type { NewLead } from '../types'
 import { Icon } from './Icon'
@@ -17,6 +17,8 @@ interface Progress {
   total: number
   saved: number
   onMap: number
+  /** Of those on the map, how many are pinned on their street rather than the house. */
+  street: number
   notFound: NewLead[]
 }
 
@@ -28,7 +30,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
   const [listName, setListName] = useState('')
   const [assignTo, setAssignTo] = useState('')
   const [dupes, setDupes] = useState<NewLead[]>([])
-  const [progress, setProgress] = useState<Progress>({ total: 0, saved: 0, onMap: 0, notFound: [] })
+  const [progress, setProgress] = useState<Progress>({ total: 0, saved: 0, onMap: 0, street: 0, notFound: [] })
   const [status, setStatus] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [stopped, setStopped] = useState(false)
@@ -92,7 +94,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
     setStopped(false)
     setStep('running')
     await holdScreen()
-    const p: Progress = { total: fresh.length, saved: 0, onMap: 0, notFound: [] }
+    const p: Progress = { total: fresh.length, saved: 0, onMap: 0, street: 0, notFound: [] }
     setProgress({ ...p })
 
     for (let i = 0; i < fresh.length; i += CHUNK) {
@@ -115,16 +117,21 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
             )
             for (const r of again) if (r.lat != null) byId.set(r.id, r)
           }
-          const located = chunk.map((l, j) => ({
-            ...l,
-            lat: byId.get(String(j))?.lat ?? null,
-            lng: byId.get(String(j))?.lng ?? null,
-            assignedTo: assignTo || null,
-          }))
+          const located = chunk.map((l, j) => {
+            const r = byId.get(String(j))
+            const pos =
+              r?.lat != null && r.lng != null
+                ? r.approx
+                  ? spreadStreetPin(`${l.address}|${l.zip}`, r.lat, r.lng)
+                  : { lat: r.lat, lng: r.lng }
+                : null
+            return { ...l, lat: pos?.lat ?? null, lng: pos?.lng ?? null, pinApprox: !!(pos && r?.approx), assignedTo: assignTo || null }
+          })
           setStatus(`Saving ${i + 1}–${i + chunk.length}…`)
           await store.importList(listName.trim() || fileName, located)
           p.saved += located.length
           p.onMap += located.filter((l) => l.lat != null).length
+          p.street += located.filter((l) => l.pinApprox).length
           p.notFound.push(...located.filter((l) => l.lat == null))
           setProgress({ ...p, notFound: [...p.notFound] })
           saved = true
@@ -261,6 +268,11 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
                   Pause import
                 </button>
               </>
+            )}
+            {progress.street > 0 && (
+              <div className="muted" style={{ fontSize: 14 }}>
+                {progress.street.toLocaleString()} of those on the map are pinned on their street (likely new builds the map services don't list yet). They show as dashed pins; agents find the house by its number.
+              </div>
             )}
             {step === 'done' && progress.notFound.length > 0 && (
               <details>
