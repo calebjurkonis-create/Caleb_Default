@@ -11,6 +11,7 @@ import { TeamPanel } from './components/TeamPanel'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
 import { STATUS, STATUS_ORDER } from './lib/dispositions'
 import { activeClaim } from './lib/leads'
+import { orderByRoads, roadPath, type RoadPath } from './lib/roads'
 import { insidePolygon, milesBetween, optimizeOrder, type NavApp, type Point } from './lib/route'
 import type { Lead, LeadStatus, Outcome } from './types'
 
@@ -29,6 +30,10 @@ const FILTERS: { key: MapFilter; label: string; match(s: LeadStatus): boolean }[
 interface SavedRoute {
   ids: string[]
   startedAt: string
+  /** Where the route was planned from, so the road path can start there. */
+  start?: Point
+  /** Road-following path for these exact stops (sig = ids it was drawn for). */
+  path?: RoadPath & { sig: string }
 }
 
 function usePref<T>(key: string, initial: T): [T, (v: T) => void] {
@@ -92,6 +97,12 @@ function Field({ store }: { store: Store }) {
   const [themeKey, setThemeKey] = useState('')
   const [assignTo, setAssignTo] = useState('')
   const [placingId, setPlacingId] = useState<string | null>(null)
+  // Road-routing key managers set under More; empty = straight lines, exactly as before.
+  const [roadKey, setRoadKey] = useState('')
+  const [routing, setRouting] = useState(false)
+  useEffect(() => {
+    store.getSetting('ors_key').then(setRoadKey).catch(() => {})
+  }, [store])
   const mapRef = useRef<MapHandle | null>(null)
   const didFit = useRef(false)
 
@@ -153,9 +164,19 @@ function Field({ store }: { store: Store }) {
       return
     }
     const start = here ?? mapRef.current?.center() ?? (stops[0] as Point)
-    const ordered = optimizeOrder(start, stops as (Lead & Point)[])
+    let ordered = optimizeOrder(start, stops as (Lead & Point)[])
+    if (roadKey) {
+      // Order by real drive time when the routing service answers; otherwise keep the straight-line order.
+      setRouting(true)
+      const ids = await orderByRoads(roadKey, start, ordered)
+      setRouting(false)
+      if (ids) {
+        const byLead = new Map(ordered.map((l) => [l.id, l]))
+        ordered = ids.map((id) => byLead.get(id)!)
+      }
+    }
     if (route) await store.claim(route.ids.filter((id) => !ordered.some((o) => o.id === id)), false).catch(() => {})
-    setRoute({ ids: ordered.map((l) => l.id), startedAt: new Date().toISOString() })
+    setRoute({ ids: ordered.map((l) => l.id), startedAt: new Date().toISOString(), start: { lat: start.lat, lng: start.lng } })
     await store.claim(ordered.map((l) => l.id), true).catch(() => {})
     setSelection(new Set())
     mapRef.current?.fit(ordered as Point[])
@@ -188,16 +209,46 @@ function Field({ store }: { store: Store }) {
     }
   }
 
-  function reoptimize() {
+  async function reoptimize() {
     if (!route) return
     const remaining = routeLeads.filter((l) => !doneStops.has(l.id))
     const done = routeLeads.filter((l) => doneStops.has(l.id))
     const start = here ?? (remaining[0] as Point)
     if (!start) return
-    const ordered = optimizeOrder(start, remaining as (Lead & Point)[])
-    setRoute({ ...route, ids: [...done, ...ordered].map((l) => l.id) })
+    let ordered = optimizeOrder(start, remaining as (Lead & Point)[])
+    if (roadKey) {
+      setRouting(true)
+      const ids = await orderByRoads(roadKey, start, ordered)
+      setRouting(false)
+      if (ids) {
+        const byLead = new Map(ordered.map((l) => [l.id, l]))
+        ordered = ids.map((id) => byLead.get(id)!)
+      }
+    }
+    setRoute({ ...route, ids: [...done, ...ordered].map((l) => l.id), start: { lat: start.lat, lng: start.lng } })
     flash('Re-ordered from your location')
   }
+
+  // Draw the route along real roads whenever its stops change (only with a routing key).
+  const pathSig = route && roadKey ? `${route.start?.lat},${route.start?.lng}|${route.ids.join(',')}` : ''
+  useEffect(() => {
+    if (!pathSig || !route || route.path?.sig === pathSig) return
+    const pts = routeLeads.filter((l) => l.lat != null && l.lng != null) as Point[]
+    const points = route.start ? [route.start, ...pts] : pts
+    let live = true
+    const t = setTimeout(() => {
+      roadPath(roadKey, points).then((p) => {
+        if (!live || !p) return
+        setRoute({ ...route, path: { ...p, sig: pathSig } })
+      })
+    }, 400)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathSig, routeLeads.length])
+  const roadLine = route?.path && route.path.sig === pathSig ? route.path : null
 
   async function endRoute() {
     if (!route) return
@@ -260,6 +311,7 @@ function Field({ store }: { store: Store }) {
           selected={selection}
           claimedByOthers={claimedByOthers}
           route={routeLeads}
+          roadLine={roadLine?.line}
           doneStops={doneStops}
           me={here}
           focusId={openId}
@@ -393,6 +445,8 @@ function Field({ store }: { store: Store }) {
 
         {!openLead && tab === 'route' && (
           <RoutePanel
+            road={roadLine ? { miles: roadLine.miles, minutes: roadLine.minutes } : null}
+            planning={routing}
             stops={routeLeads}
             done={doneStops}
             me={here}
@@ -420,7 +474,7 @@ function Field({ store }: { store: Store }) {
           />
         )}
         {!openLead && tab === 'more' && (
-          <MorePanel store={store} snap={snap} navApp={navApp} satellite={satellite} onNavApp={setNavApp} onSatellite={setSatellite} onClose={() => setTab('map')} />
+          <MorePanel store={store} snap={snap} navApp={navApp} satellite={satellite} onNavApp={setNavApp} onSatellite={setSatellite} onClose={() => setTab('map')} roadKey={roadKey} onRoadKey={setRoadKey} />
         )}
       </div>
 

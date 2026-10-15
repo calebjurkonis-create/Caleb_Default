@@ -46,6 +46,7 @@ Behind the scenes a username is stored as `username@knockroute.example.com`; no 
 Run each file in [`supabase/updates/`](supabase/updates/) once, in order, in the SQL Editor
 (`schema.sql` already includes them for brand-new setups):
 - `001-keep-history-and-street-pins.sql`: street-level pins; removing leads keeps their door-knock history.
+- `003-app-settings.sql`: shared settings, used for the road-routing key.
 
 #### Adding and removing people later
 - **Add:** Authentication → Users → Add user → Create new user (step 4), then set their name and role in the app's Team tab.
@@ -57,6 +58,12 @@ Run each file in [`supabase/updates/`](supabase/updates/) once, in order, in the
 1. Sign in at [vercel.com](https://vercel.com) with GitHub, **Add New → Project**, and import this repository.
 2. The office project's URL and publishable key are built into `src/main.tsx`. To point at a different project, change them there or set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under **Environment Variables**.
 3. Deploy. Share the URL with the team; on iPhone: open in Safari → Share → **Add to Home Screen**.
+
+#### Road routing (optional)
+Routes draw straight lines between stops until a manager turns on road routing: create a free account at
+[openrouteservice.org](https://openrouteservice.org), copy the API key from the dashboard, and paste it under
+**More → Road routing**. Stops are then ordered by drive time and the route follows real streets. If the service
+is unavailable or over its daily limit, the app falls back to straight lines on its own.
 
 ## How it works
 

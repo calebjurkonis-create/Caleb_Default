@@ -191,6 +191,20 @@ export function createDemoStore(): Store {
       data.activities = data.activities.map((a) => (gone.has(a.leadId) ? { ...a, leadId: '' } : a))
       commit()
     },
+    async getSetting(name) {
+      try {
+        return localStorage.getItem(`knockroute-demo-setting-${name}`) ?? ''
+      } catch {
+        return ''
+      }
+    },
+    async setSetting(name, value) {
+      try {
+        localStorage.setItem(`knockroute-demo-setting-${name}`, value)
+      } catch {
+        /* ignore */
+      }
+    },
     async canDeleteLeadsSafely() {
       return true
     },

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { roadPath } from '../lib/roads'
 import type { Snapshot, Store } from '../data/store'
 import type { NavApp } from '../lib/route'
 import { Icon } from './Icon'
@@ -11,9 +12,11 @@ interface Props {
   onNavApp(a: NavApp): void
   onSatellite(on: boolean): void
   onClose(): void
+  roadKey: string
+  onRoadKey(key: string): void
 }
 
-export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellite, onClose }: Props) {
+export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellite, onClose, roadKey, onRoadKey }: Props) {
   const [sim, setSim] = useState(store.simulateTeam?.get() ?? false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -44,6 +47,14 @@ export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellit
           <span>Satellite map</span>
           <input id="sat" type="checkbox" checked={satellite} onChange={(e) => onSatellite(e.target.checked)} />
         </label>
+
+        {snap.me?.role === 'manager' ? (
+          <RoadRouting store={store} roadKey={roadKey} onRoadKey={onRoadKey} />
+        ) : (
+          <div className="muted" style={{ fontSize: 14 }}>
+            Road routing is {roadKey ? 'on: routes follow real streets.' : 'off: routes show straight lines between stops.'}
+          </div>
+        )}
 
         <div className="card">
           <b>Put KnockRoute on your home screen</b>
@@ -107,5 +118,75 @@ export function MorePanel({ store, snap, navApp, satellite, onNavApp, onSatellit
         </button>
       </div>
     </section>
+  )
+}
+
+/** Managers paste the OpenRouteService key once; everyone's routes then follow real roads. */
+function RoadRouting({ store, roadKey, onRoadKey }: { store: Store; roadKey: string; onRoadKey(k: string): void }) {
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  async function save(value: string) {
+    setBusy(true)
+    setMsg(null)
+    try {
+      if (value) {
+        // Check the key with a tiny two-point route before saving it for the whole team.
+        const ok = await roadPath(value, [
+          { lat: 28.5384, lng: -81.3789 },
+          { lat: 28.5421, lng: -81.3723 },
+        ])
+        if (!ok) {
+          setMsg("That key didn't work. Copy it again from openrouteservice.org (Dashboard → your token) and paste it here.")
+          return
+        }
+      }
+      await store.setSetting('ors_key', value)
+      onRoadKey(value)
+      setDraft('')
+      setMsg(value ? 'Road routing is on for the whole team.' : 'Road routing is off. Routes show straight lines again.')
+    } catch (e) {
+      setMsg((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <b>Road routing</b>
+      <div className="muted" style={{ fontSize: 14 }}>
+        {roadKey
+          ? 'On. Routes follow real streets and stops are ordered by drive time. If the routing service is ever unavailable, routes fall back to straight lines.'
+          : 'Off. Routes show straight lines between stops. Paste a free OpenRouteService key to turn it on for everyone.'}
+      </div>
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (draft.trim()) save(draft.trim())
+        }}
+      >
+        <input
+          id="ors-key"
+          type="text"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder={roadKey ? 'Paste a new key to replace it' : 'Paste your OpenRouteService key'}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          style={{ flex: '1 1 180px', minWidth: 0 }}
+        />
+        <button className="btn small" disabled={busy || !draft.trim()}>{busy ? 'Checking…' : 'Save'}</button>
+      </form>
+      {roadKey && (
+        <button className="btn small" disabled={busy} onClick={() => save('')}>
+          Turn road routing off
+        </button>
+      )}
+      {msg && <div className="muted" style={{ fontSize: 14 }}>{msg}</div>}
+    </div>
   )
 }

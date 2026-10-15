@@ -6,6 +6,10 @@ import type { Lead } from '../types'
 import { Icon } from './Icon'
 
 interface Props {
+  /** Real driving totals for the whole route when road routing is on. */
+  road: { miles: number; minutes: number } | null
+  /** Waiting on the routing service to order stops. */
+  planning: boolean
   stops: Lead[]
   done: Set<string>
   me: Point | null
@@ -36,9 +40,13 @@ export function RoutePanel(p: Props) {
           <h2>Today's route</h2>
           {p.stops.length > 0 && est && (
             <div className="muted num" style={{ marginTop: 4 }}>
-              {p.done.size} of {p.stops.length} done · {remaining.length} left · ~{est.miles.toFixed(1)} mi · ~{est.driveMin} min driving
+              {p.done.size} of {p.stops.length} done · {remaining.length} left ·{' '}
+              {p.road
+                ? `${p.road.miles.toFixed(1)} mi · ${p.road.minutes} min driving (whole route, by road)`
+                : `~${est.miles.toFixed(1)} mi · ~${est.driveMin} min driving`}
             </div>
           )}
+          {p.planning && <div className="muted" style={{ marginTop: 4 }}>Finding the fastest order by road…</div>}
         </div>
         <button className="close" onClick={p.onClose} aria-label="Close">
           <Icon name="close" />
@@ -65,8 +73,8 @@ export function RoutePanel(p: Props) {
                 <button className="btn small" onClick={() => setN(Math.min(60, n + 5))} aria-label="More stops">
                   <Icon name="plus" />
                 </button>
-                <button className="btn primary" style={{ flex: 1 }} disabled={!p.openCount} onClick={() => p.onNearest(n)}>
-                  Plan {n} stops
+                <button className="btn primary" style={{ flex: 1 }} disabled={!p.openCount || p.planning} onClick={() => p.onNearest(n)}>
+                  {p.planning ? 'Planning…' : `Plan ${n} stops`}
                 </button>
               </div>
               <div className="muted" style={{ fontSize: 14 }}>
@@ -108,7 +116,7 @@ export function RoutePanel(p: Props) {
                   <Icon name="route" /> {legs.length > 1 ? `Google Maps leg ${i + 1}` : 'Whole route in Google Maps'}
                 </a>
               ))}
-              <button className="btn small" onClick={p.onReoptimize}>
+              <button className="btn small" disabled={p.planning} onClick={p.onReoptimize}>
                 Re-order from here
               </button>
             </div>

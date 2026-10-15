@@ -17,6 +17,8 @@ interface Props {
   /** Lead ids claimed by teammates (drawn faded). */
   claimedByOthers: Set<string>
   route: Lead[]
+  /** Road-following path for the route ([lat, lng] pairs); straight lines between stops when absent. */
+  roadLine?: [number, number][]
   doneStops: Set<string>
   me: Point | null
   focusId: string | null
@@ -163,10 +165,12 @@ export function MapView(props: Props) {
     group.clearLayers()
     const stops = props.route.filter((l) => l.lat != null && l.lng != null)
     if (!stops.length) return
-    const line: L.LatLngExpression[] = [
-      ...(props.me ? [[props.me.lat, props.me.lng] as L.LatLngTuple] : []),
-      ...stops.map((s) => [s.lat!, s.lng!] as L.LatLngTuple),
-    ]
+    const line: L.LatLngExpression[] = props.roadLine?.length
+      ? props.roadLine
+      : [
+          ...(props.me ? [[props.me.lat, props.me.lng] as L.LatLngTuple] : []),
+          ...stops.map((s) => [s.lat!, s.lng!] as L.LatLngTuple),
+        ]
     const routeColor = getComputedStyle(document.documentElement).getPropertyValue('--route').trim() || '#f2b632'
     L.polyline(line, { color: '#10202e', weight: 7, opacity: 0.35, interactive: false }).addTo(group)
     L.polyline(line, { color: routeColor, weight: 4, dashArray: '8 8', interactive: false }).addTo(group)
@@ -180,7 +184,7 @@ export function MapView(props: Props) {
         .on('click', () => onTap.current(s))
         .addTo(group)
     })
-  }, [props.route, props.doneStops, props.me, props.themeKey])
+  }, [props.route, props.roadLine, props.doneStops, props.me, props.themeKey])
 
   // My location.
   useEffect(() => {

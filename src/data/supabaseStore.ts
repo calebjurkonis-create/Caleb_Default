@@ -292,6 +292,20 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         activities: snapshot.activities.map((a) => (gone.has(a.leadId) ? { ...a, leadId: '' } : a)),
       })
     },
+    async getSetting(name) {
+      const { data, error } = await sb.from('app_settings').select('value').eq('name', name).maybeSingle()
+      return error ? '' : ((data?.value as string) ?? '')
+    },
+    async setSetting(name, value) {
+      const { error } = await sb.from('app_settings').upsert({ name, value, updated_at: new Date().toISOString() })
+      if (error) {
+        throw new Error(
+          /app_settings/.test(error.message)
+            ? 'The database needs a one-time update first (supabase/updates/003). See the setup steps.'
+            : error.message,
+        )
+      }
+    },
     async canDeleteLeadsSafely() {
       // Added by the one-time update that makes removed leads keep their history.
       const { data, error } = await sb.rpc('knockroute_version')

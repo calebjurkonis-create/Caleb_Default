@@ -52,6 +52,10 @@ export interface Store {
   deleteLeads(ids: string[]): Promise<void>
   /** False when the database still deletes history along with leads (needs the one-time update). */
   canDeleteLeadsSafely(): Promise<boolean>
+  /** Shared app settings (e.g. the road-routing key). Empty string when not set or not available. */
+  getSetting(name: string): Promise<string>
+  /** Managers only. */
+  setSetting(name: string, value: string): Promise<void>
   /** Managers: fix addresses and/or map locations. */
   updateLeads(changes: LeadFix[]): Promise<void>
   setRole?(memberId: string, role: Role): Promise<void>
