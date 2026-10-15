@@ -14,10 +14,10 @@ It's a web app that installs to the home screen (no App Store needed).
 
 ```bash
 npm install
-npm run dev
+VITE_DEMO=1 npm run dev
 ```
 
-With no database configured, the app runs in **demo mode**: sample leads (fake people around Celebration, Kissimmee, Hunters Creek, College Park, Winter Garden and Clermont), saved only in that browser. Simulated teammates log a visit every minute or so, which shows how the live map behaves.
+With `VITE_DEMO=1`, the app runs in **demo mode**: sample leads (fake people around Celebration, Kissimmee, Hunters Creek, College Park, Winter Garden and Clermont), saved only in that browser. Simulated teammates log a visit every minute or so, which shows how the live map behaves.
 
 ## Go live for the whole team
 
@@ -44,7 +44,7 @@ You need two free accounts. About 20 minutes total.
 ### 2. Vercel (hosting)
 
 1. Sign in at [vercel.com](https://vercel.com) with GitHub, **Add New → Project**, and import this repository.
-2. Under **Environment Variables** add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with the values from step 1.6.
+2. The office project's URL and publishable key are built into `src/main.tsx`. To point at a different project, change them there or set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under **Environment Variables**.
 3. Deploy. Share the URL with the team; on iPhone: open in Safari → Share → **Add to Home Screen**.
 
 ## How it works
