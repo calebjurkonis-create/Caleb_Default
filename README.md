@@ -60,9 +60,8 @@ Run each file in [`supabase/updates/`](supabase/updates/) once, in order, in the
 3. Deploy. Share the URL with the team; on iPhone: open in Safari → Share → **Add to Home Screen**.
 
 #### Road routing (optional)
-Routes draw straight lines between stops until a manager turns on road routing: create a free account at
-[openrouteservice.org](https://openrouteservice.org), copy the API key from the dashboard, and paste it under
-**More → Road routing**. Stops are then ordered by drive time and the route follows real streets. If the service
+The office's OpenRouteService key is built in (`src/lib/roads.ts`), so routes follow real roads with no setup.
+Managers can swap in a different key or turn routing off under **More → Road routing** (needs `003-app-settings.sql`). Stops are then ordered by drive time and the route follows real streets. If the service
 is unavailable or over its daily limit, the app falls back to straight lines on its own.
 
 ## How it works

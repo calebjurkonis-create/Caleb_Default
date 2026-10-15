@@ -7,6 +7,20 @@ import type { Point } from './route'
  */
 
 const API = 'https://api.openrouteservice.org'
+
+/**
+ * The office's OpenRouteService key, built in so routing works with no setup.
+ * A manager can replace it (or turn routing off) under More → Road routing.
+ */
+export const BUILT_IN_ROAD_KEY =
+  'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNiMmVhMjg0OGZiZjQ3ZDBhOTBjYTExYWRjODY0Mjk5IiwiaCI6Im11cm11cjY0In0='
+
+/** The key to use: a manager's saved key, the built-in one, or none if a manager turned routing off. */
+export function effectiveRoadKey(saved: string): string {
+  if (saved === 'off') return ''
+  return saved || BUILT_IN_ROAD_KEY
+}
+
 const TIMEOUT_MS = 10_000
 /** Most stops the free plan takes in one request. */
 const MAX_POINTS = 50

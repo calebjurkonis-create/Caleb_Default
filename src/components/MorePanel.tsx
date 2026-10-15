@@ -131,7 +131,7 @@ function RoadRouting({ store, roadKey, onRoadKey }: { store: Store; roadKey: str
     setBusy(true)
     setMsg(null)
     try {
-      if (value) {
+      if (value && value !== 'off') {
         // Check the key with a tiny two-point route before saving it for the whole team.
         const ok = await roadPath(value, [
           { lat: 28.5384, lng: -81.3789 },
@@ -145,7 +145,7 @@ function RoadRouting({ store, roadKey, onRoadKey }: { store: Store; roadKey: str
       await store.setSetting('ors_key', value)
       onRoadKey(value)
       setDraft('')
-      setMsg(value ? 'Road routing is on for the whole team.' : 'Road routing is off. Routes show straight lines again.')
+      setMsg(value === 'off' ? 'Road routing is off. Routes show straight lines again.' : 'Road routing is on for the whole team.')
     } catch (e) {
       setMsg((e as Error).message)
     } finally {
@@ -159,7 +159,7 @@ function RoadRouting({ store, roadKey, onRoadKey }: { store: Store; roadKey: str
       <div className="muted" style={{ fontSize: 14 }}>
         {roadKey
           ? 'On. Routes follow real streets and stops are ordered by drive time. If the routing service is ever unavailable, routes fall back to straight lines.'
-          : 'Off. Routes show straight lines between stops. Paste a free OpenRouteService key to turn it on for everyone.'}
+          : 'Off. Routes show straight lines between stops. Turn it back on below, or paste a different OpenRouteService key.'}
       </div>
       <form
         className="row"
@@ -182,8 +182,13 @@ function RoadRouting({ store, roadKey, onRoadKey }: { store: Store; roadKey: str
         <button className="btn small" disabled={busy || !draft.trim()}>{busy ? 'Checking…' : 'Save'}</button>
       </form>
       {roadKey && (
-        <button className="btn small" disabled={busy} onClick={() => save('')}>
+        <button className="btn small" disabled={busy} onClick={() => save('off')}>
           Turn road routing off
+        </button>
+      )}
+      {!roadKey && (
+        <button className="btn small" disabled={busy} onClick={() => save('')}>
+          Turn road routing back on
         </button>
       )}
       {msg && <div className="muted" style={{ fontSize: 14 }}>{msg}</div>}

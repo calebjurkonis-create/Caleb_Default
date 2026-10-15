@@ -11,7 +11,7 @@ import { TeamPanel } from './components/TeamPanel'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
 import { STATUS, STATUS_ORDER } from './lib/dispositions'
 import { activeClaim } from './lib/leads'
-import { orderByRoads, roadPath, type RoadPath } from './lib/roads'
+import { effectiveRoadKey, orderByRoads, roadPath, type RoadPath } from './lib/roads'
 import { insidePolygon, milesBetween, optimizeOrder, type NavApp, type Point } from './lib/route'
 import type { Lead, LeadStatus, Outcome } from './types'
 
@@ -98,10 +98,11 @@ function Field({ store }: { store: Store }) {
   const [assignTo, setAssignTo] = useState('')
   const [placingId, setPlacingId] = useState<string | null>(null)
   // Road-routing key managers set under More; empty = straight lines, exactly as before.
-  const [roadKey, setRoadKey] = useState('')
+  const [roadSetting, setRoadSetting] = useState('')
+  const roadKey = effectiveRoadKey(roadSetting)
   const [routing, setRouting] = useState(false)
   useEffect(() => {
-    store.getSetting('ors_key').then(setRoadKey).catch(() => {})
+    store.getSetting('ors_key').then(setRoadSetting).catch(() => {})
   }, [store])
   const mapRef = useRef<MapHandle | null>(null)
   const didFit = useRef(false)
@@ -474,7 +475,7 @@ function Field({ store }: { store: Store }) {
           />
         )}
         {!openLead && tab === 'more' && (
-          <MorePanel store={store} snap={snap} navApp={navApp} satellite={satellite} onNavApp={setNavApp} onSatellite={setSatellite} onClose={() => setTab('map')} roadKey={roadKey} onRoadKey={setRoadKey} />
+          <MorePanel store={store} snap={snap} navApp={navApp} satellite={satellite} onNavApp={setNavApp} onSatellite={setSatellite} onClose={() => setTab('map')} roadKey={roadKey} onRoadKey={setRoadSetting} />
         )}
       </div>
 
