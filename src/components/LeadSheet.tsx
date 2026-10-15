@@ -5,6 +5,7 @@ import { activeClaim, cityLine, clockTime, formatPhone, fullName, timeAgo, turni
 import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead, Outcome } from '../types'
 import { Icon } from './Icon'
+import { geocodeAll, geocodeFallback } from '../lib/geocode'
 
 interface Props {
   store: Store
@@ -15,9 +16,11 @@ interface Props {
   onClose(): void
   onToggleRoute(): void
   onSaved(lead: Lead, outcome: Outcome): void
+  /** Managers: pick the house on the map by tapping it. */
+  onPlacePin(): void
 }
 
-export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggleRoute, onSaved }: Props) {
+export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggleRoute, onSaved, onPlacePin }: Props) {
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -186,6 +189,8 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           </label>
         )}
 
+        {isManager && <PinTools store={store} lead={lead} onPlacePin={onPlacePin} />}
+
         <div className="section">
           <h3 style={{ fontSize: 20 }}>History</h3>
           {history === null ? (
@@ -217,5 +222,93 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
         </div>
       </div>
     </section>
+  )
+}
+
+/** Fix a lead that has no pin (or a pin in the wrong spot). */
+function PinTools({ store, lead, onPlacePin }: { store: Store; lead: Lead; onPlacePin(): void }) {
+  const hasPin = lead.lat != null && lead.lng != null
+  const [editing, setEditing] = useState(false)
+  const [address, setAddress] = useState(lead.address)
+  const [city, setCity] = useState(lead.city)
+  const [zip, setZip] = useState(lead.zip)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    setEditing(false)
+    setAddress(lead.address)
+    setCity(lead.city)
+    setZip(lead.zip)
+    setMsg(null)
+  }, [lead.id, lead.address, lead.city, lead.zip])
+
+  async function lookUp(fix: { address: string; city: string; zip: string }) {
+    setBusy(true)
+    setMsg('Looking it up…')
+    try {
+      const input = [{ id: lead.id, street: fix.address, city: fix.city, state: lead.state, zip: fix.zip }]
+      let [hit] = await geocodeAll(input, () => {})
+      if (hit?.lat == null) [hit] = await geocodeFallback(input)
+      const changed = fix.address !== lead.address || fix.city !== lead.city || fix.zip !== lead.zip
+      if (hit?.lat != null) {
+        await store.updateLeads([{ id: lead.id, ...fix, lat: hit.lat, lng: hit.lng }])
+        setMsg('Found it. The pin is on the map.')
+        setEditing(false)
+      } else {
+        if (changed) await store.updateLeads([{ id: lead.id, ...fix }])
+        setMsg(`Still not found${changed ? ' (address saved)' : ''}. Check the spelling, or tap “Place pin on the map” and tap the house.`)
+      }
+    } catch (e) {
+      setMsg(`Couldn't look it up: ${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="section">
+      <h3 style={{ fontSize: 20 }}>Map pin</h3>
+      {!hasPin && <div className="notice">This address wasn't found, so the lead isn't on the map yet.</div>}
+      {editing ? (
+        <form
+          className="section"
+          onSubmit={(e) => {
+            e.preventDefault()
+            lookUp({ address: address.trim(), city: city.trim(), zip: zip.trim() })
+          }}
+        >
+          <label className="field">
+            Street address
+            <input id={`fix-address-${lead.id}`} type="text" value={address} onChange={(e) => setAddress(e.target.value)} required />
+          </label>
+          <div className="row" style={{ alignItems: 'end' }}>
+            <label className="field" style={{ flex: '2 1 160px' }}>
+              City
+              <input id={`fix-city-${lead.id}`} type="text" value={city} onChange={(e) => setCity(e.target.value)} required />
+            </label>
+            <label className="field" style={{ flex: '1 1 90px' }}>
+              ZIP
+              <input id={`fix-zip-${lead.id}`} inputMode="numeric" maxLength={5} value={zip} onChange={(e) => setZip(e.target.value.replace(/\D/g, ''))} />
+            </label>
+          </div>
+          <div className="row">
+            <button className="btn primary" disabled={busy}>Save and find on map</button>
+            <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <div className="row">
+          {!hasPin && (
+            <button className="btn" disabled={busy} onClick={() => lookUp({ address: lead.address, city: lead.city, zip: lead.zip })}>
+              Look up again
+            </button>
+          )}
+          <button className="btn" onClick={() => setEditing(true)}>Fix address</button>
+          <button className="btn" onClick={onPlacePin}>{hasPin ? 'Move pin' : 'Place pin on the map'}</button>
+        </div>
+      )}
+      {msg && <div className="muted">{msg}</div>}
+    </div>
   )
 }

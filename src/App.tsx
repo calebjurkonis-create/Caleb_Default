@@ -84,6 +84,7 @@ function Field({ store }: { store: Store }) {
   const [satellite, setSatellite] = usePref('knockroute-sat', false)
   const [themeKey, setThemeKey] = useState('')
   const [assignTo, setAssignTo] = useState('')
+  const [placingId, setPlacingId] = useState<string | null>(null)
   const mapRef = useRef<MapHandle | null>(null)
   const didFit = useRef(false)
 
@@ -258,7 +259,22 @@ function Field({ store }: { store: Store }) {
           drawing={drawing}
           satellite={satellite}
           themeKey={themeKey}
-          onTap={(l) => setOpenId(l.id)}
+          onTap={(l) => !placingId && setOpenId(l.id)}
+          onMapTap={
+            placingId
+              ? async (p) => {
+                  const id = placingId
+                  setPlacingId(null)
+                  try {
+                    await store.updateLeads([{ id, lat: p.lat, lng: p.lng }])
+                    flash('Pin placed')
+                  } catch (e) {
+                    flash(`Couldn't save the pin: ${(e as Error).message}`)
+                  }
+                  setOpenId(id)
+                }
+              : undefined
+          }
           onLasso={onLasso}
           onReady={(h) => (mapRef.current = h)}
         />
@@ -287,6 +303,16 @@ function Field({ store }: { store: Store }) {
         </div>
 
         {drawing && <div className="draw-hint">Drag a loop around the houses</div>}
+        {placingId && (
+          <div className="banner">
+            <div className="banner-row">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b>Tap the house</b> for {(() => { const l = snap.leads.find((x) => x.id === placingId); return l ? `${l.firstName} ${l.lastName}, ${l.address}` : 'this lead' })()}. Zoom in first for accuracy.
+              </div>
+              <button className="btn small" onClick={() => { const id = placingId; setPlacingId(null); setOpenId(id) }}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {!drawing && selection.size > 0 && !openLead && (
           <div className="banner">
@@ -326,7 +352,7 @@ function Field({ store }: { store: Store }) {
           </div>
         )}
 
-        {!drawing && selection.size === 0 && !openLead && tab === 'map' && (
+        {!drawing && !placingId && selection.size === 0 && !openLead && tab === 'map' && (
           <div className="legend" aria-label="Pin colors">
             {STATUS_ORDER.map((s) => (
               <span key={s}><span className="dot" style={{ background: STATUS[s].color }} />{STATUS[s].label}</span>
@@ -344,6 +370,13 @@ function Field({ store }: { store: Store }) {
             onClose={() => setOpenId(null)}
             onToggleRoute={() => toggleOnRoute(openLead)}
             onSaved={onSaved}
+            onPlacePin={() => {
+              setPlacingId(openLead.id)
+              setOpenId(null)
+              setSatellite(true)
+              if (openLead.lat != null) mapRef.current?.flyTo(openLead as Point, 18)
+              else if (here) mapRef.current?.flyTo(here, 16)
+            }}
           />
         )}
 

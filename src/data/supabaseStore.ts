@@ -253,6 +253,23 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         emitLeads()
       }
     },
+    async updateLeads(changes) {
+      for (const c of changes) {
+        const row: Row = {}
+        if (c.address !== undefined) row.address = c.address
+        if (c.city !== undefined) row.city = c.city
+        if (c.zip !== undefined) row.zip = c.zip
+        if (c.lat !== undefined) row.lat = c.lat
+        if (c.lng !== undefined) row.lng = c.lng
+        check(await sb.from('leads').update(row).eq('id', c.id))
+        const l = leads.get(c.id)
+        if (l) {
+          const { id: _id, ...patch } = c
+          leads.set(c.id, { ...l, ...patch })
+        }
+      }
+      emitLeads()
+    },
     async deleteList(listId) {
       check(await sb.from('lead_lists').delete().eq('id', listId))
       await loadAll()

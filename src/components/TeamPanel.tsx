@@ -5,6 +5,7 @@ import { clockTime, isToday, shortName, timeAgo } from '../lib/leads'
 import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, saveFile, type AgentRow, type Period } from '../lib/reports'
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
+import { geocodeAll, geocodeFallback } from '../lib/geocode'
 
 interface Props {
   store: Store
@@ -31,6 +32,30 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
   const [fetched, setFetched] = useState<{ period: Period; acts: Activity[] } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [exportMsg, setExportMsg] = useState<string | null>(null)
+  const [retry, setRetry] = useState<{ listId: string; text: string; busy: boolean } | null>(null)
+
+  async function retryList(listId: string) {
+    const missing = snap.leads.filter((l) => l.listId === listId && l.lat == null)
+    if (!missing.length || retry?.busy) return
+    const input = missing.map((l) => ({ id: l.id, street: l.address, city: l.city, state: l.state, zip: l.zip }))
+    try {
+      setRetry({ listId, busy: true, text: `Looking up ${missing.length} again…` })
+      const first = await geocodeAll(input, () => {})
+      const found = first.filter((r) => r.lat != null)
+      const still = input.filter((i) => !found.some((f) => f.id === i.id))
+      const second = await geocodeFallback(still, (d, t) => setRetry({ listId, busy: true, text: `Second try: ${d} of ${t}…` }))
+      found.push(...second.filter((r) => r.lat != null))
+      if (found.length) await store.updateLeads(found.map((r) => ({ id: r.id, lat: r.lat, lng: r.lng })))
+      const left = missing.length - found.length
+      setRetry({
+        listId,
+        busy: false,
+        text: `Found ${found.length} of ${missing.length}.` + (left ? ` ${left} still need a fix: Leads tab → “No pin”.` : ''),
+      })
+    } catch (e) {
+      setRetry({ listId, busy: false, text: `Couldn't finish: ${(e as Error).message}` })
+    }
+  }
   const leadById = useMemo(() => new Map(snap.leads.map((l) => [l.id, l])), [snap.leads])
   const range = useMemo(() => periodRange(period), [period])
 
@@ -75,10 +100,11 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
   }
 
   const listCounts = useMemo(() => {
-    const c = new Map<string, { total: number; worked: number; assigned: number }>()
+    const c = new Map<string, { total: number; worked: number; assigned: number; noPin: number }>()
     for (const l of snap.leads) {
-      const r = c.get(l.listId) ?? { total: 0, worked: 0, assigned: 0 }
+      const r = c.get(l.listId) ?? { total: 0, worked: 0, assigned: 0, noPin: 0 }
       r.total++
+      if (l.lat == null) r.noPin++
       if (l.status !== 'new') r.worked++
       if (l.assignedTo) r.assigned++
       c.set(l.listId, r)
@@ -202,13 +228,21 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
               <Icon name="upload" /> Import a spreadsheet
             </button>
             {snap.lists.map((list) => {
-              const c = listCounts.get(list.id) ?? { total: 0, worked: 0, assigned: 0 }
+              const c = listCounts.get(list.id) ?? { total: 0, worked: 0, assigned: 0, noPin: 0 }
               return (
                 <div key={list.id} className="card">
                   <div style={{ fontWeight: 600 }}>{list.name}</div>
                   <div className="muted num" style={{ fontSize: 14 }}>
                     {c.total} leads · {c.worked} worked · {c.assigned} assigned to someone · added {timeAgo(list.createdAt)}
                   </div>
+                  {c.noPin > 0 && (
+                    <div className="row">
+                      <button className="btn small" disabled={retry?.busy} onClick={() => retryList(list.id)}>
+                        Find {c.noPin} without a pin
+                      </button>
+                    </div>
+                  )}
+                  {retry?.listId === list.id && <div className="muted" style={{ fontSize: 14 }}>{retry.text}</div>}
                   {confirmDelete === list.id ? (
                     <div className="row">
                       <button className="btn small danger" onClick={() => { store.deleteList(list.id); setConfirmDelete(null) }}>

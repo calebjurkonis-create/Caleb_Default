@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Snapshot, Store } from '../data/store'
-import { geocodeAll } from '../lib/geocode'
+import { geocodeAll, geocodeFallback } from '../lib/geocode'
 import { FIELDS, guessMapping, missingRequired, readSheet, splitDuplicates, toLeads, type Mapping, type Sheet } from '../lib/importer'
 import type { NewLead } from '../types'
 import { Icon } from './Icon'
@@ -107,6 +107,14 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
             () => {},
           )
           const byId = new Map(found.map((r) => [r.id, r]))
+          const missed = chunk.map((l, j) => ({ l, j })).filter(({ j }) => byId.get(String(j))?.lat == null)
+          if (missed.length) {
+            setStatus(`Second try for ${missed.length} address${missed.length === 1 ? '' : 'es'} the first lookup missed…`)
+            const again = await geocodeFallback(
+              missed.map(({ l, j }) => ({ id: String(j), street: l.address, city: l.city, state: l.state, zip: l.zip })),
+            )
+            for (const r of again) if (r.lat != null) byId.set(r.id, r)
+          }
           const located = chunk.map((l, j) => ({
             ...l,
             lat: byId.get(String(j))?.lat ?? null,

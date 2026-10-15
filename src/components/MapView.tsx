@@ -25,6 +25,8 @@ interface Props {
   themeKey: string
   onTap(lead: Lead): void
   onLasso(poly: Point[]): void
+  /** When set, a tap anywhere on the map reports where (used to place a lead's pin). */
+  onMapTap?: (p: Point) => void
   onReady(h: MapHandle): void
 }
 
@@ -50,6 +52,8 @@ export function MapView(props: Props) {
   const meLayer = useRef<L.Marker | null>(null)
   const onTap = useRef(props.onTap)
   onTap.current = props.onTap
+  const onMapTap = useRef(props.onMapTap)
+  onMapTap.current = props.onMapTap
   // Bumps after every pan/zoom so only pins in view get drawn (keeps 10,000+ leads smooth).
   const [view, setView] = useState(0)
   const markers = useRef(new Map<string, L.CircleMarker>())
@@ -63,6 +67,7 @@ export function MapView(props: Props) {
     pins.current = L.layerGroup().addTo(m)
     routeLayer.current = L.layerGroup().addTo(m)
     m.on('moveend', () => setView((v) => v + 1))
+    m.on('click', (e: L.LeafletMouseEvent) => onMapTap.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }))
     map.current = m
     props.onReady({
       flyTo: (p, zoom) => m.flyTo([p.lat, p.lng], zoom ?? Math.max(m.getZoom(), 16), { duration: 0.6 }),
@@ -194,7 +199,7 @@ export function MapView(props: Props) {
 
   return (
     <>
-      <div ref={el} className="map" />
+      <div ref={el} className={`map${props.onMapTap ? ' placing' : ''}`} />
       {props.drawing && map.current && <Lasso map={map.current} onDone={props.onLasso} />}
     </>
   )

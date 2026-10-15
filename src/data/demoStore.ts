@@ -180,6 +180,16 @@ export function createDemoStore(): Store {
       ]
       commit()
     },
+    async updateLeads(changes) {
+      const byId = new Map(changes.map((c) => [c.id, c]))
+      data.leads = data.leads.map((l) => {
+        const c = byId.get(l.id)
+        if (!c) return l
+        const { id: _id, ...patch } = c
+        return { ...l, ...patch }
+      })
+      commit()
+    },
     async deleteList(listId) {
       const gone = new Set(data.leads.filter((l) => l.listId === listId).map((l) => l.id))
       data.lists = data.lists.filter((l) => l.id !== listId)

@@ -1,6 +1,15 @@
 import { useSyncExternalStore } from 'react'
 import type { Activity, Lead, LeadList, Member, NewLead, Outcome, Role } from '../types'
 
+export interface LeadFix {
+  id: string
+  address?: string
+  city?: string
+  zip?: string
+  lat?: number | null
+  lng?: number | null
+}
+
 export interface Snapshot {
   ready: boolean
   me: Member | null
@@ -34,6 +43,8 @@ export interface Store {
   /** Adds leads to the list with this name, creating it if needed. */
   importList(name: string, leads: NewLead[]): Promise<void>
   deleteList(listId: string): Promise<void>
+  /** Managers: fix addresses and/or map locations. */
+  updateLeads(changes: LeadFix[]): Promise<void>
   setRole?(memberId: string, role: Role): Promise<void>
   renameMember?(memberId: string, name: string): Promise<void>
 

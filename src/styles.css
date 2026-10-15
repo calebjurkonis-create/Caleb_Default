@@ -346,3 +346,4 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .board tr.idle td { color: var(--muted); }
 /* Panel contents keep their natural height; the panel scrolls instead of squashing rows like the chip bar. */
 .sheet-body > * { flex-shrink: 0; }
+.map.placing, .map.placing .leaflet-interactive { cursor: crosshair; }

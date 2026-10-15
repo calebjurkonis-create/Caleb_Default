@@ -18,14 +18,14 @@ type Sort = 'near' | 'recent' | 'turning'
 
 export function LeadsPanel({ snap, leads, me, onClose, onOpenLead }: Props) {
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState<LeadStatus | 'all'>('all')
+  const [status, setStatus] = useState<LeadStatus | 'all' | 'nopin'>('all')
   const [sort, setSort] = useState<Sort>(me ? 'near' : 'recent')
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase()
     let r = leads.filter(
       (l) =>
-        (status === 'all' || l.status === status) &&
+        (status === 'all' || (status === 'nopin' ? l.lat == null : l.status === status)) &&
         (!needle || `${l.firstName} ${l.lastName} ${l.address} ${l.city} ${l.zip}`.toLowerCase().includes(needle)),
     )
     const dist = (l: Lead) => (me && l.lat != null ? milesBetween(me, { lat: l.lat, lng: l.lng! }) : Infinity)
@@ -35,6 +35,7 @@ export function LeadsPanel({ snap, leads, me, onClose, onOpenLead }: Props) {
     return { list: r.slice(0, 200), total: r.length, dist }
   }, [leads, q, status, sort, me])
 
+  const noPin = useMemo(() => leads.filter((l) => l.lat == null).length, [leads])
   const counts = useMemo(() => {
     const c: Partial<Record<LeadStatus, number>> = {}
     for (const l of leads) c[l.status] = (c[l.status] ?? 0) + 1
@@ -60,6 +61,12 @@ export function LeadsPanel({ snap, leads, me, onClose, onOpenLead }: Props) {
           <button className="chip" aria-pressed={status === 'all'} onClick={() => setStatus('all')}>
             All
           </button>
+          {noPin > 0 && (
+            <button className="chip" aria-pressed={status === 'nopin'} onClick={() => setStatus('nopin')}>
+              <span className="dot" style={{ background: 'transparent', border: '1.5px dashed var(--muted)' }} />
+              No pin <span className="num muted">{noPin}</span>
+            </button>
+          )}
           {STATUS_ORDER.filter((s) => counts[s]).map((s) => (
             <button key={s} className="chip" aria-pressed={status === s} onClick={() => setStatus(s)}>
               <span className="dot" style={{ background: STATUS[s].color }} />

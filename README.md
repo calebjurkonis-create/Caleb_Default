@@ -56,6 +56,7 @@ You need two free accounts. About 20 minutes total.
 | `src/data/supabaseStore.ts` | Live mode, Supabase with realtime updates |
 | `supabase/schema.sql` | Tables, access rules (agents only see the pool + their own leads), and the trigger that updates a lead when a disposition is logged |
 | `api/geocode.ts` | Turns addresses into map points with the free U.S. Census Bureau geocoder |
+| `api/geocode-fallback.ts` | Second try for addresses the Census misses: OpenStreetMap (Nominatim, then Photon), exact house matches only, about one per second |
 | `src/lib/route.ts` | Stop ordering (nearest-neighbor + 2-opt), map links |
 
 ## Notes
