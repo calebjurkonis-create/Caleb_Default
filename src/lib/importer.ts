@@ -87,3 +87,43 @@ export function toLeads(sheet: Sheet, mapping: Mapping): NewLead[] {
     }))
     .filter((l) => l.address && (l.firstName || l.lastName))
 }
+
+const ABBR: Record<string, string> = {
+  street: 'st', drive: 'dr', avenue: 'ave', av: 'ave', road: 'rd', lane: 'ln', court: 'ct', circle: 'cir',
+  boulevard: 'blvd', place: 'pl', terrace: 'ter', parkway: 'pkwy', highway: 'hwy', trail: 'trl', point: 'pt',
+  north: 'n', south: 's', east: 'e', west: 'w', apartment: 'apt', unit: 'apt', suite: 'apt',
+}
+
+/**
+ * Identifies one person at one address, ignoring case, punctuation and spelled-out
+ * street words ("Drive" vs "Dr"). Spouses at the same house stay separate leads.
+ */
+export function leadKey(l: Pick<NewLead, 'firstName' | 'lastName' | 'address' | 'zip' | 'city'>): string {
+  const words = l.address
+    .toLowerCase()
+    .replace(/#/g, ' apt ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => ABBR[w] ?? w)
+  const place = l.zip.slice(0, 5) || l.city.toLowerCase().trim()
+  const name = `${l.firstName} ${l.lastName}`.toLowerCase().replace(/[^a-z]/g, '')
+  return `${words.join(' ')}|${place}|${name}`
+}
+
+/** Splits rows into new leads and ones already in the app (or repeated within the file). */
+export function splitDuplicates<T extends NewLead>(rows: T[], existing: Iterable<Parameters<typeof leadKey>[0]>): { fresh: T[]; dupes: T[] } {
+  const seen = new Set<string>()
+  for (const l of existing) seen.add(leadKey(l))
+  const fresh: T[] = []
+  const dupes: T[] = []
+  for (const r of rows) {
+    const k = leadKey(r)
+    if (seen.has(k)) dupes.push(r)
+    else {
+      seen.add(k)
+      fresh.push(r)
+    }
+  }
+  return { fresh, dupes }
+}

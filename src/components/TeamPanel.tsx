@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { memberName, type Snapshot, type Store } from '../data/store'
 import { STATUS } from '../lib/dispositions'
 import { clockTime, isToday, shortName, timeAgo } from '../lib/leads'
-import type { Lead } from '../types'
+import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, saveFile, type AgentRow, type Period } from '../lib/reports'
+import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
 
 interface Props {
@@ -13,25 +14,66 @@ interface Props {
   onImport(): void
 }
 
+type SortKey = 'appts' | 'doors' | 'followUps' | 'rate'
+
+const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'doors', label: 'Doors' },
+  { key: 'appts', label: 'Appts' },
+  { key: 'followUps', label: 'F/U' },
+  { key: 'rate', label: 'Appt %' },
+]
+
 export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props) {
   const isManager = snap.me?.role === 'manager'
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [period, setPeriod] = useState<Period>('today')
+  const [sortKey, setSortKey] = useState<SortKey>('appts')
+  const [fetched, setFetched] = useState<{ period: Period; acts: Activity[] } | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [exportMsg, setExportMsg] = useState<string | null>(null)
   const leadById = useMemo(() => new Map(snap.leads.map((l) => [l.id, l])), [snap.leads])
+  const range = useMemo(() => periodRange(period), [period])
 
-  const today = useMemo(() => snap.activities.filter((a) => isToday(a.createdAt)), [snap.activities])
-  const board = useMemo(() => {
-    const rows = new Map<string, { id: string; doors: number; calls: number; appts: number }>()
-    for (const a of today) {
-      const r = rows.get(a.memberId) ?? { id: a.memberId, doors: 0, calls: 0, appts: 0 }
-      if (a.channel === 'door') r.doors++
-      else r.calls++
-      if (a.outcome === 'appointment') r.appts++
-      rows.set(a.memberId, r)
+  // Today comes straight from the live feed; longer periods are fetched, and refreshed when someone logs a visit.
+  const latestId = snap.activities[0]?.id
+  useEffect(() => {
+    if (period === 'today') return
+    let live = true
+    setLoadError(null)
+    store
+      .activitiesBetween(range.from, range.to)
+      .then((acts) => live && setFetched({ period, acts }))
+      .catch((e) => live && setLoadError((e as Error).message))
+    return () => {
+      live = false
     }
-    return [...rows.values()].sort((a, b) => b.appts - a.appts || b.doors + b.calls - (a.doors + a.calls))
-  }, [today])
+  }, [store, period, range, latestId])
 
-  const totals = board.reduce((t, r) => ({ doors: t.doors + r.doors, calls: t.calls + r.calls, appts: t.appts + r.appts }), { doors: 0, calls: 0, appts: 0 })
+  const acts = useMemo(() => {
+    if (period === 'today') return snap.activities.filter((a) => isToday(a.createdAt))
+    return fetched?.period === period ? fetched.acts : null
+  }, [period, snap.activities, fetched])
+
+  const rows = useMemo(() => {
+    if (!acts) return []
+    const r = agentRows(acts, snap.members)
+    const val = (x: AgentRow) => x[sortKey]
+    return r.sort((a, b) => val(b) - val(a) || b.appts - a.appts || b.doors - a.doors || a.name.localeCompare(b.name))
+  }, [acts, snap.members, sortKey])
+
+  const totals = rows.reduce((t, r) => ({ doors: t.doors + r.doors, appts: t.appts + r.appts, followUps: t.followUps + r.followUps }), { doors: 0, appts: 0, followUps: 0 })
+
+  async function exportCsv(kind: 'board' | 'all') {
+    if (!acts) return
+    setExportMsg(null)
+    const stamp = fileStamp(range.from, range.to)
+    const ok =
+      kind === 'board'
+        ? await saveFile(`knockroute-leaderboard-${stamp}.csv`, leaderboardCsv(rows))
+        : await saveFile(`knockroute-dispositions-${stamp}.csv`, dispositionsCsv(acts, snap.members, leadById, snap.lists))
+    if (ok) setExportMsg('Spreadsheet ready. It opens in Excel, Numbers or Google Sheets.')
+  }
+
   const listCounts = useMemo(() => {
     const c = new Map<string, { total: number; worked: number; assigned: number }>()
     for (const l of snap.leads) {
@@ -48,45 +90,75 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
     <section className="sheet full" aria-label="Team">
       <header className="sheet-head">
         <div className="grow">
-          <h2>Team today</h2>
-          <div className="muted" style={{ marginTop: 4 }}>
-            {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-          </div>
+          <h2>Team</h2>
+          <div className="muted" style={{ marginTop: 4 }}>{range.label}</div>
         </div>
         <button className="close" onClick={onClose} aria-label="Close">
           <Icon name="close" />
         </button>
       </header>
       <div className="sheet-body">
+        <div className="chips" style={{ position: 'static', padding: 0 }} role="group" aria-label="Time period">
+          {PERIODS.map((p) => (
+            <button key={p.key} className="chip" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+
         <div className="stats">
-          <div className="stat"><b>{totals.doors}</b><span>Doors knocked</span></div>
-          <div className="stat"><b>{totals.calls}</b><span>Calls</span></div>
-          <div className="stat"><b>{totals.appts}</b><span>Appointments</span></div>
+          <div className="stat"><b>{acts ? totals.doors : '–'}</b><span>Doors knocked</span></div>
+          <div className="stat"><b>{acts ? totals.appts : '–'}</b><span>Appointments</span></div>
+          <div className="stat"><b>{acts ? totals.followUps : '–'}</b><span>Follow-ups</span></div>
         </div>
 
         <div className="section">
-          <h3 style={{ fontSize: 20 }}>Board</h3>
-          {board.length === 0 ? (
-            <div className="muted">No dispositions logged yet today.</div>
+          <h3 style={{ fontSize: 20 }}>Leaderboard</h3>
+          {loadError ? (
+            <div className="err">Couldn't load this period: {loadError}</div>
+          ) : !acts ? (
+            <div className="muted">Loading…</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="board">
                 <thead>
-                  <tr><th>Agent</th><th>Doors</th><th>Calls</th><th>Appts</th></tr>
+                  <tr>
+                    <th>Agent</th>
+                    {COLUMNS.map((c) => (
+                      <th key={c.key}>
+                        <button className={`sort${sortKey === c.key ? ' on' : ''}`} onClick={() => setSortKey(c.key)} aria-pressed={sortKey === c.key}>
+                          {c.label}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
                 </thead>
                 <tbody>
-                  {board.map((r, i) => (
-                    <tr key={r.id} className={r.id === snap.me?.id ? 'me' : ''}>
-                      <td><span className="rank">{i + 1}</span>{memberName(snap, r.id)}</td>
+                  {rows.map((r, i) => (
+                    <tr key={r.id} className={`${r.id === snap.me?.id ? 'me' : ''}${r.doors === 0 ? ' idle' : ''}`}>
+                      <td><span className="rank">{r.doors ? i + 1 : ''}</span>{r.id === snap.me?.id ? 'You' : r.name}</td>
                       <td>{r.doors}</td>
-                      <td>{r.calls}</td>
                       <td>{r.appts}</td>
+                      <td>{r.followUps}</td>
+                      <td>{r.doors ? `${Math.round(r.rate * 100)}%` : '–'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+          <div className="muted" style={{ fontSize: 13 }}>Tap a column to rank by it. F/U = follow-ups.</div>
+          {isManager && acts && (
+            <div className="row">
+              <button className="btn small" onClick={() => exportCsv('board')} disabled={!acts.length}>
+                <Icon name="download" /> Export leaderboard
+              </button>
+              <button className="btn small" onClick={() => exportCsv('all')} disabled={!acts.length}>
+                <Icon name="download" /> Export every disposition
+              </button>
+            </div>
+          )}
+          {exportMsg && <div className="muted" style={{ fontSize: 14 }}>{exportMsg}</div>}
         </div>
 
         <div className="section">
@@ -102,7 +174,7 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
                     <span className="dot" style={{ background: STATUS[a.outcome].color }} />
                     <div>
                       <div>
-                        <b>{memberName(snap, a.memberId)}</b> {a.channel === 'door' ? 'knocked' : 'called'}{' '}
+                        <b>{memberName(snap, a.memberId)}</b> knocked{' '}
                         {lead ? (
                           <button className="link" onClick={() => onOpenLead(lead)}>{shortName(lead)}</button>
                         ) : (

@@ -1,4 +1,4 @@
-import type { Activity, Channel, Lead, LeadList, Member, Outcome } from '../types'
+import type { Activity, Lead, LeadList, Member, Outcome } from '../types'
 
 /** Everyone on the office board, plus Christian and Nico. Demo only. */
 const TEAM = [
@@ -43,8 +43,8 @@ const AREAS = [
   { city: 'Clermont', zip: '34711', county: 'Lake', lat: 28.5400, lng: -81.7600, n: 25 },
 ]
 
-const OUTCOME_MIX: Outcome[] = ['no_answer', 'no_answer', 'no_answer', 'left_note', 'left_note', 'follow_up',
-  'appointment', 'not_interested', 'info_requested', 'bad_info']
+const OUTCOME_MIX: Outcome[] = ['no_answer', 'no_answer', 'no_answer', 'no_answer', 'follow_up', 'follow_up',
+  'appointment', 'not_interested', 'not_interested', 'bad_info']
 
 export function buildSample(now = new Date()): { leads: Lead[]; activities: Activity[]; lists: LeadList[] } {
   const r = rng(65)
@@ -95,12 +95,11 @@ export function buildSample(now = new Date()): { leads: Lead[]; activities: Acti
           const at = new Date(now.getTime() - Math.floor(r() * 4 * 86400_000) - 3600_000)
           const member = pick(SAMPLE_MEMBERS.slice(0, 12))
           const outcome = pick(OUTCOME_MIX)
-          const channel: Channel = lead.phone && r() < 0.3 ? 'phone' : 'door'
           activities.push({
             id: `act-${n}-${t}`,
             leadId: lead.id,
             memberId: member.id,
-            channel,
+            channel: 'door',
             outcome,
             notes: sampleNote(outcome, r),
             createdAt: at.toISOString(),
@@ -122,7 +121,7 @@ export function buildSample(now = new Date()): { leads: Lead[]; activities: Acti
 }
 
 const NOTES: Partial<Record<Outcome, string[]>> = {
-  no_answer: ['Car in driveway, no answer', 'Gated, try weekend', 'Dog barking, nobody came', ''],
+  no_answer: ['Car in driveway, no answer', 'Gated, try weekend', 'Dog barking, nobody came', 'Left door hanger'],
   left_note: ['Left door hanger with card', 'Left VM, call back after 5', 'Note left in door'],
   follow_up: ['Spouse home, husband back Thursday', 'Busy cooking, come back after 6', 'Wants us to swing by next week'],
   appointment: ['Set for Tue 10am at kitchen table', 'Appt Sat 11am, bring Med Supp quotes'],

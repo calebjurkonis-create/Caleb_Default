@@ -21,7 +21,7 @@ const FILTERS: { key: MapFilter; label: string; match(s: LeadStatus): boolean }[
   { key: 'all', label: 'All', match: () => true },
   { key: 'open', label: 'Still open', match: (s) => !STATUS[s].closed },
   { key: 'new', label: 'Not worked', match: (s) => s === 'new' },
-  { key: 'callbacks', label: 'Follow-ups', match: (s) => s === 'follow_up' || s === 'info_requested' },
+  { key: 'callbacks', label: 'Follow-ups', match: (s) => s === 'follow_up' },
   { key: 'appointments', label: 'Appointments', match: (s) => s === 'appointment' },
 ]
 

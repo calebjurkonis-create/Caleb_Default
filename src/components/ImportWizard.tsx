@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Snapshot, Store } from '../data/store'
 import { geocodeAll } from '../lib/geocode'
-import { FIELDS, guessMapping, missingRequired, readSheet, toLeads, type Mapping, type Sheet } from '../lib/importer'
+import { FIELDS, guessMapping, missingRequired, readSheet, splitDuplicates, toLeads, type Mapping, type Sheet } from '../lib/importer'
 import type { NewLead } from '../types'
 import { Icon } from './Icon'
 
@@ -14,6 +14,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
   const [mapping, setMapping] = useState<Mapping>({})
   const [progress, setProgress] = useState(0)
   const [leads, setLeads] = useState<NewLead[]>([])
+  const [dupes, setDupes] = useState<NewLead[]>([])
   const [listName, setListName] = useState('')
   const [assignTo, setAssignTo] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -37,10 +38,15 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
 
   async function locate() {
     if (!sheet) return
-    const rows = toLeads(sheet, mapping)
+    const { fresh: rows, dupes: skipped } = splitDuplicates(toLeads(sheet, mapping), snap.leads)
+    setDupes(skipped)
+    setError(null)
+    if (!rows.length) {
+      setError(`All ${skipped.length} leads in this file are already in KnockRoute. Nothing new to add.`)
+      return
+    }
     setStep('locating')
     setProgress(0)
-    setError(null)
     try {
       const results = await geocodeAll(
         rows.map((l, i) => ({ id: String(i), street: l.address, city: l.city, state: l.state, zip: l.zip })),
@@ -150,6 +156,19 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
               <div className="stat"><b className="num">{found}</b><span>On the map</span></div>
               <div className="stat"><b className="num">{notFound.length}</b><span>Address not found</span></div>
             </div>
+            {dupes.length > 0 && (
+              <details>
+                <summary>
+                  {dupes.length} already in KnockRoute, skipped
+                </summary>
+                <ul style={{ fontSize: 14 }}>
+                  {dupes.slice(0, 50).map((l, i) => (
+                    <li key={i}>{l.firstName} {l.lastName}, {l.address}, {l.city}</li>
+                  ))}
+                </ul>
+                <div className="muted" style={{ fontSize: 14 }}>Same person at the same address. Their existing history is kept.</div>
+              </details>
+            )}
             {notFound.length > 0 && (
               <details>
                 <summary>Addresses that weren't found ({notFound.length})</summary>
@@ -175,7 +194,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
               </select>
             </label>
             <button className="btn primary block" disabled={saving} onClick={save}>
-              {saving ? 'Saving…' : `Add ${leads.length} leads for the team`}
+              {saving ? 'Saving…' : `Add ${leads.length} new lead${leads.length === 1 ? '' : 's'} for the team`}
             </button>
           </>
         )}

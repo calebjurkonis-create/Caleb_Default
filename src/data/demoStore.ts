@@ -4,7 +4,7 @@ import { activeClaim } from '../lib/leads'
 import { buildSample, sampleNote, SAMPLE_MEMBERS } from './sample'
 import type { Snapshot, Store } from './store'
 
-const KEY = 'knockroute-demo-v2'
+const KEY = 'knockroute-demo-v3'
 const SIM_KEY = 'knockroute-demo-sim'
 
 interface Saved {
@@ -96,7 +96,7 @@ export function createDemoStore(): Store {
       if (open.length && others.length) {
         const lead = open[Math.floor(Math.random() * open.length)]
         const who = others[Math.floor(Math.random() * Math.min(others.length, 10))]
-        const outcomes = ['no_answer', 'no_answer', 'left_note', 'follow_up', 'appointment', 'not_interested'] as const
+        const outcomes = ['no_answer', 'no_answer', 'no_answer', 'follow_up', 'appointment', 'not_interested'] as const
         const outcome = outcomes[Math.floor(Math.random() * outcomes.length)]
         record({
           id: uid(),
@@ -133,10 +133,16 @@ export function createDemoStore(): Store {
     async history(leadId) {
       return data.activities.filter((a) => a.leadId === leadId)
     },
-    async logActivity(leadId, channel, outcome, notes) {
+    async logActivity(leadId, outcome, notes) {
       if (!data.meId) return
-      record({ id: uid(), leadId, memberId: data.meId, channel, outcome, notes, createdAt: new Date().toISOString() })
+      if (!notes.trim()) throw new Error('Add a note before submitting')
+      record({ id: uid(), leadId, memberId: data.meId, channel: 'door', outcome, notes, createdAt: new Date().toISOString() })
       commit()
+    },
+    async activitiesBetween(from, to) {
+      const a = from.toISOString()
+      const b = to.toISOString()
+      return data.activities.filter((x) => x.createdAt >= a && x.createdAt < b)
     },
     async claim(ids, on) {
       const set = new Set(ids)

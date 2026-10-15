@@ -169,9 +169,10 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       )
       return rows.map(toActivity)
     },
-    async logActivity(leadId, channel, outcome, notes) {
+    async logActivity(leadId, outcome, notes) {
+      if (!notes.trim()) throw new Error('Add a note before submitting')
       const row = check<Row>(
-        await sb.from('activities').insert({ lead_id: leadId, channel, outcome, notes }).select().single(),
+        await sb.from('activities').insert({ lead_id: leadId, channel: 'door', outcome, notes }).select().single(),
       )
       // Show it right away; the live update confirms it for everyone else.
       const a = toActivity(row)
@@ -180,6 +181,12 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         leads.set(leadId, { ...l, status: outcome, attempts: l.attempts + 1, lastActivityAt: a.createdAt, lastActivityBy: a.memberId })
       }
       emit({ activities: [a, ...snapshot.activities.filter((x) => x.id !== a.id)], leads: [...leads.values()] })
+    },
+    async activitiesBetween(from, to) {
+      const rows = await selectAll(sb, 'activities', (q) =>
+        q.gte('created_at', from.toISOString()).lt('created_at', to.toISOString()).order('created_at', { ascending: false }),
+      )
+      return rows.map(toActivity)
     },
     async claim(ids, on) {
       check(await sb.rpc('claim_leads', { lead_ids: ids, claim: on }))

@@ -3,7 +3,7 @@ import { memberName, type Snapshot, type Store } from '../data/store'
 import { OUTCOMES, STATUS } from '../lib/dispositions'
 import { activeClaim, cityLine, clockTime, formatPhone, fullName, timeAgo, turning65 } from '../lib/leads'
 import { navUrl, type NavApp } from '../lib/route'
-import type { Activity, Channel, Lead, Outcome } from '../types'
+import type { Activity, Lead, Outcome } from '../types'
 import { Icon } from './Icon'
 
 interface Props {
@@ -18,7 +18,6 @@ interface Props {
 }
 
 export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggleRoute, onSaved }: Props) {
-  const [channel, setChannel] = useState<Channel>('door')
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -31,7 +30,6 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
     setOutcome(null)
     setNotes('')
     setError(null)
-    setChannel('door')
   }, [lead.id])
   useEffect(() => {
     let live = true
@@ -46,12 +44,14 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
   const isManager = snap.me?.role === 'manager'
   const hasPoint = lead.lat != null && lead.lng != null
 
+  const noteMissing = !notes.trim()
+
   async function save() {
-    if (!outcome) return
+    if (!outcome || noteMissing) return
     setSaving(true)
     setError(null)
     try {
-      await store.logActivity(lead.id, channel, outcome, notes.trim())
+      await store.logActivity(lead.id, outcome, notes.trim())
       onSaved(lead, outcome)
       setOutcome(null)
       setNotes('')
@@ -137,15 +137,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
         </div>
 
         <div className="section">
-          <h3 style={{ fontSize: 20 }}>Disposition</h3>
-          <div className="seg" role="group" aria-label="Communication type">
-            <button aria-pressed={channel === 'door'} onClick={() => setChannel('door')}>
-              <Icon name="door" /> Door knock
-            </button>
-            <button aria-pressed={channel === 'phone'} onClick={() => setChannel('phone')}>
-              <Icon name="phone" /> Phone call
-            </button>
-          </div>
+          <h3 style={{ fontSize: 20 }}>Door knock disposition</h3>
           <div className="outcomes" role="group" aria-label="Next disposition">
             {OUTCOMES.map((o) => (
               <button key={o} className="outcome" aria-pressed={outcome === o} onClick={() => setOutcome(o)}>
@@ -155,17 +147,24 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
             ))}
           </div>
           <label className="field">
-            Disposition notes
+            Notes (required)
             <textarea
               id={`notes-${lead.id}`}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="What happened? Best time to come back?"
+              required
             />
           </label>
           {error && <div className="err">{error}</div>}
-          <button className="btn primary block" disabled={!outcome || saving} onClick={save}>
-            {saving ? 'Saving…' : outcome ? `Submit · ${STATUS[outcome].label}` : 'Pick a disposition'}
+          <button className="btn primary block" disabled={!outcome || noteMissing || saving} onClick={save}>
+            {saving
+              ? 'Saving…'
+              : !outcome
+                ? 'Pick a disposition'
+                : noteMissing
+                  ? 'Add a note to submit'
+                  : `Submit · ${STATUS[outcome].label}`}
           </button>
         </div>
 
@@ -202,7 +201,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
                     <div>
                       <span className="who">{memberName(snap, a.memberId)}</span>{' '}
                       <span className="muted">
-                        · {a.channel === 'door' ? 'Door knock' : 'Phone call'} · {STATUS[a.outcome].label}
+                        · {a.channel === 'phone' ? 'Phone call' : 'Door knock'} · {STATUS[a.outcome].label}
                       </span>
                     </div>
                     <div className="muted" style={{ fontSize: 13 }}>

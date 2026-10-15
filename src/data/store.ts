@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Activity, Channel, Lead, LeadList, Member, NewLead, Outcome, Role } from '../types'
+import type { Activity, Lead, LeadList, Member, NewLead, Outcome, Role } from '../types'
 
 export interface Snapshot {
   ready: boolean
@@ -25,7 +25,10 @@ export interface Store {
   signOut(): Promise<void>
 
   history(leadId: string): Promise<Activity[]>
-  logActivity(leadId: string, channel: Channel, outcome: Outcome, notes: string): Promise<void>
+  /** Logs a door knock. Notes are required. */
+  logActivity(leadId: string, outcome: Outcome, notes: string): Promise<void>
+  /** Every disposition the viewer can see between two times, newest first (for reports). */
+  activitiesBetween(from: Date, to: Date): Promise<Activity[]>
   claim(leadIds: string[], on: boolean): Promise<void>
   assign(leadIds: string[], memberId: string | null): Promise<void>
   importList(name: string, leads: NewLead[]): Promise<void>

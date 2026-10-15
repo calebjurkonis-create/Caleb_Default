@@ -19,16 +19,11 @@ export const STATUS: Record<LeadStatus, StatusInfo> = {
   bad_info: { label: 'Bad Info', color: 'var(--st-bad)', closed: true },
 }
 
-/** Same order as the OSCR dropdown. */
-export const OUTCOMES: Outcome[] = [
-  'no_answer',
-  'left_note',
-  'appointment',
-  'follow_up',
-  'not_interested',
-  'info_requested',
-  'bad_info',
-]
+/**
+ * The choices offered on a door knock, in OSCR's order. "Left VM/Note" and
+ * "Info Requested" stay defined above only so any older history still displays.
+ */
+export const OUTCOMES: Outcome[] = ['no_answer', 'appointment', 'follow_up', 'not_interested', 'bad_info']
 
 export const STATUS_ORDER: LeadStatus[] = ['new', ...OUTCOMES]
 

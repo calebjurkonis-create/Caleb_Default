@@ -337,3 +337,12 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .switch input { width: 22px; height: 22px; }
 .notice { background: var(--surface-2); border-left: 4px solid var(--route); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
 .err { color: var(--danger); font-weight: 600; }
+
+.board th .sort {
+  border: 0; background: none; padding: 4px 2px; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+  text-decoration: underline dotted; text-underline-offset: 3px;
+}
+.board th .sort.on { color: var(--ink); text-decoration: underline; text-decoration-color: var(--route); text-decoration-thickness: 3px; }
+.board tr.idle td { color: var(--muted); }
+/* Panel contents keep their natural height; the panel scrolls instead of squashing rows like the chip bar. */
+.sheet-body > * { flex-shrink: 0; }
