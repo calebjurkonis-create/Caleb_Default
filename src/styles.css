@@ -349,3 +349,11 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .map.placing, .map.placing .leaflet-interactive { cursor: crosshair; }
 .board td.ratio { white-space: nowrap; font-weight: 600; }
 .board th, .board td { padding-left: 2px; padding-right: 2px; }
+/* Color key doubles as the disposition filter. */
+.legend-hint { grid-column: 1 / -1; font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.legend-item {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 3px 2px; margin: 0;
+  font: inherit; font-size: 12px; color: var(--ink); text-align: left; min-height: 26px; border-radius: 6px;
+}
+.legend-item[aria-pressed='false'] { color: var(--muted); text-decoration: line-through; opacity: 0.55; }
+.legend-item[aria-pressed='false'] .dot { background: transparent !important; border-color: var(--muted); box-shadow: none; }

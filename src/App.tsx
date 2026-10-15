@@ -17,6 +17,7 @@ import type { Lead, LeadStatus, Outcome } from './types'
 type Tab = 'map' | 'route' | 'leads' | 'team' | 'more'
 type MapFilter = 'all' | 'open' | 'new' | 'callbacks' | 'appointments'
 
+/** One-tap presets. Each one sets which dispositions show; the color key below fine-tunes them. */
 const FILTERS: { key: MapFilter; label: string; match(s: LeadStatus): boolean }[] = [
   { key: 'all', label: 'All', match: () => true },
   { key: 'open', label: 'Still open', match: (s) => !STATUS[s].closed },
@@ -76,7 +77,12 @@ function Field({ store }: { store: Store }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [drawing, setDrawing] = useState(false)
-  const [filter, setFilter] = useState<MapFilter>('all')
+  // Dispositions hidden on the map, remembered on this phone. Empty = show everything.
+  const [hiddenList, setHiddenList] = usePref<LeadStatus[]>('knockroute-hidden', [])
+  const hidden = useMemo(() => new Set(hiddenList), [hiddenList])
+  const applyPreset = (f: (typeof FILTERS)[number]) => setHiddenList(STATUS_ORDER.filter((s) => !f.match(s)))
+  const presetOn = (f: (typeof FILTERS)[number]) => STATUS_ORDER.every((s) => f.match(s) === !hidden.has(s))
+  const toggleStatus = (s: LeadStatus) => setHiddenList(hidden.has(s) ? hiddenList.filter((x) => x !== s) : [...hiddenList, s])
   const [importing, setImporting] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [here, setHere] = useState<Point | null>(null)
@@ -116,8 +122,7 @@ function Field({ store }: { store: Store }) {
 
   const visible = useMemo(() => visibleLeads(snap), [snap])
   const byId = useMemo(() => new Map(visible.map((l) => [l.id, l])), [visible])
-  const fmatch = FILTERS.find((f) => f.key === filter)!.match
-  const mapLeads = useMemo(() => visible.filter((l) => fmatch(l.status)), [visible, fmatch])
+  const mapLeads = useMemo(() => visible.filter((l) => !hidden.has(l.status)), [visible, hidden])
   const claimedByOthers = useMemo(
     () => new Set(visible.filter((l) => { const c = activeClaim(l); return c && c !== me.id }).map((l) => l.id)),
     [visible, me.id],
@@ -161,7 +166,8 @@ function Field({ store }: { store: Store }) {
   function nearest(n: number) {
     const start = here ?? mapRef.current?.center()
     if (!start) return
-    const pool = visible.filter((l) => routable(l) && !route?.ids.includes(l.id))
+    // Only what's showing on the map, so hidden dispositions don't end up on the route.
+    const pool = mapLeads.filter((l) => routable(l) && !route?.ids.includes(l.id))
     pool.sort((a, b) => milesBetween(start, a as Point) - milesBetween(start, b as Point))
     planRoute(pool.slice(0, n))
   }
@@ -284,7 +290,7 @@ function Field({ store }: { store: Store }) {
 
         <div className="chips" role="group" aria-label="Show on map">
           {FILTERS.map((f) => (
-            <button key={f.key} className="chip" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+            <button key={f.key} className="chip" aria-pressed={presetOn(f)} onClick={() => applyPreset(f)}>
               {f.label}
             </button>
           ))}
@@ -354,9 +360,13 @@ function Field({ store }: { store: Store }) {
         )}
 
         {!drawing && !placingId && selection.size === 0 && !openLead && tab === 'map' && (
-          <div className="legend" aria-label="Pin colors">
+          <div className="legend" role="group" aria-label="Show or hide pins by disposition">
+            <span className="legend-hint">Tap to show/hide</span>
             {STATUS_ORDER.map((s) => (
-              <span key={s}><span className="dot" style={{ background: STATUS[s].color }} />{STATUS[s].label}</span>
+              <button key={s} className="legend-item" aria-pressed={!hidden.has(s)} onClick={() => toggleStatus(s)}>
+                <span className="dot" style={{ background: STATUS[s].color }} />
+                {STATUS[s].label}
+              </button>
             ))}
           </div>
         )}
@@ -406,7 +416,7 @@ function Field({ store }: { store: Store }) {
             store={store}
             snap={snap}
             onClose={() => setImporting(false)}
-            onDone={(msg) => { setImporting(false); setTab('map'); setFilter('all'); flash(msg); mapRef.current?.fit(visible.filter((l) => l.lat != null) as Point[]) }}
+            onDone={(msg) => { setImporting(false); setTab('map'); setHiddenList([]); flash(msg); mapRef.current?.fit(visible.filter((l) => l.lat != null) as Point[]) }}
           />
         )}
         {!openLead && tab === 'more' && (
