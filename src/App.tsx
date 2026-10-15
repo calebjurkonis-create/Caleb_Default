@@ -372,7 +372,7 @@ function Field({ store }: { store: Store }) {
             store={store}
             snap={snap}
             onClose={() => setImporting(false)}
-            onDone={(msg) => { setImporting(false); flash(msg); didFit.current = false }}
+            onDone={(msg) => { setImporting(false); setTab('map'); setFilter('all'); flash(msg); mapRef.current?.fit(visible.filter((l) => l.lat != null) as Point[]) }}
           />
         )}
         {!openLead && tab === 'more' && (

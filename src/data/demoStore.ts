@@ -158,14 +158,18 @@ export function createDemoStore(): Store {
       commit()
     },
     async importList(name, leads) {
-      const list: LeadList = { id: `list-${uid()}`, name, createdAt: new Date().toISOString(), createdBy: data.meId ?? '' }
-      data.lists = [list, ...data.lists]
+      let list = data.lists.find((l) => l.name.trim().toLowerCase() === name.trim().toLowerCase())
+      if (!list) {
+        list = { id: `list-${uid()}`, name, createdAt: new Date().toISOString(), createdBy: data.meId ?? '' }
+        data.lists = [list, ...data.lists]
+      }
+      const listId = list.id
       data.leads = [
         ...data.leads,
         ...leads.map((l) => ({
           ...l,
           id: `lead-${uid()}`,
-          listId: list.id,
+          listId,
           status: 'new' as const,
           attempts: 0,
           lastActivityAt: null,

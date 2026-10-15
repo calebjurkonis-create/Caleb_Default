@@ -50,6 +50,11 @@ export function MapView(props: Props) {
   const meLayer = useRef<L.Marker | null>(null)
   const onTap = useRef(props.onTap)
   onTap.current = props.onTap
+  // Bumps after every pan/zoom so only pins in view get drawn (keeps 10,000+ leads smooth).
+  const [view, setView] = useState(0)
+  const markers = useRef(new Map<string, L.CircleMarker>())
+  const leadById = useRef(new Map<string, Lead>())
+  const renderer = useRef<L.Canvas | null>(null)
 
   // Create the map once.
   useEffect(() => {
@@ -57,6 +62,7 @@ export function MapView(props: Props) {
     const m = L.map(el.current, { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([28.42, -81.5], 10)
     pins.current = L.layerGroup().addTo(m)
     routeLayer.current = L.layerGroup().addTo(m)
+    m.on('moveend', () => setView((v) => v + 1))
     map.current = m
     props.onReady({
       flyTo: (p, zoom) => m.flyTo([p.lat, p.lng], zoom ?? Math.max(m.getZoom(), 16), { duration: 0.6 }),
@@ -72,6 +78,9 @@ export function MapView(props: Props) {
     return () => {
       m.remove()
       map.current = null
+      // Pins and their canvas belong to this map instance; start fresh with the next one.
+      markers.current.clear()
+      renderer.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -86,33 +95,58 @@ export function MapView(props: Props) {
     tiles.current.bringToBack()
   }, [props.satellite])
 
-  // Lead pins.
+  // Lead pins: only what's on screen (plus a margin), smaller when zoomed far out.
+  // Markers are kept and updated in place on one canvas, so big lists stay fast.
   useEffect(() => {
     const group = pins.current
-    if (!group) return
-    group.clearLayers()
-    const renderer = L.canvas({ padding: 0.5, tolerance: 6 })
+    const m = map.current
+    if (!group || !m) return
+    renderer.current ??= L.canvas({ padding: 0.5, tolerance: 6 })
+    const bounds = m.getBounds().pad(0.3)
+    const far = m.getZoom() <= 10
     const colors = new Map<string, string>()
+    const keep = new Set<string>()
+    leadById.current = new Map(props.leads.map((l) => [l.id, l]))
     for (const lead of props.leads) {
       if (lead.lat == null || lead.lng == null) continue
+      if (lead.id !== props.focusId && !bounds.contains([lead.lat, lead.lng])) continue
+      keep.add(lead.id)
       let c = colors.get(lead.status)
       if (!c) colors.set(lead.status, (c = statusColor(lead.status)))
       const sel = props.selected.has(lead.id)
       const focus = props.focusId === lead.id
       const faded = props.claimedByOthers.has(lead.id)
-      L.circleMarker([lead.lat, lead.lng], {
-        renderer,
-        radius: focus ? 11 : sel ? 9 : 7,
+      const style = {
         color: focus || sel ? '#10202e' : '#ffffff',
-        weight: focus ? 4 : sel ? 3 : 2,
+        weight: focus ? 4 : sel ? 3 : far ? 1 : 2,
         fillColor: c,
         fillOpacity: faded ? 0.35 : 1,
         opacity: faded ? 0.6 : 1,
-      })
-        .on('click', () => onTap.current(lead))
-        .addTo(group)
+      }
+      const radius = focus ? 11 : sel ? 9 : far ? 4 : 7
+      const existing = markers.current.get(lead.id)
+      if (existing) {
+        existing.setStyle(style)
+        existing.setRadius(radius)
+        if (focus) existing.bringToFront()
+      } else {
+        const id = lead.id
+        const mk = L.circleMarker([lead.lat, lead.lng], { renderer: renderer.current, radius, ...style })
+          .on('click', () => {
+            const l = leadById.current.get(id)
+            if (l) onTap.current(l)
+          })
+          .addTo(group)
+        markers.current.set(id, mk)
+      }
     }
-  }, [props.leads, props.selected, props.focusId, props.claimedByOthers, props.themeKey])
+    for (const [id, mk] of markers.current) {
+      if (!keep.has(id)) {
+        group.removeLayer(mk)
+        markers.current.delete(id)
+      }
+    }
+  }, [props.leads, props.selected, props.focusId, props.claimedByOthers, props.themeKey, view])
 
   // Route line + numbered stops.
   useEffect(() => {

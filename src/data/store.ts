@@ -31,6 +31,7 @@ export interface Store {
   activitiesBetween(from: Date, to: Date): Promise<Activity[]>
   claim(leadIds: string[], on: boolean): Promise<void>
   assign(leadIds: string[], memberId: string | null): Promise<void>
+  /** Adds leads to the list with this name, creating it if needed. */
   importList(name: string, leads: NewLead[]): Promise<void>
   deleteList(listId: string): Promise<void>
   setRole?(memberId: string, role: Role): Promise<void>

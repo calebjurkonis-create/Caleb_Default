@@ -69,7 +69,14 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
     snapshot = { ...snapshot, ...patch }
     listeners.forEach((l) => l())
   }
-  const emitLeads = () => emit({ leads: [...leads.values()] })
+  let leadsTimer: ReturnType<typeof setTimeout> | null = null
+  const emitLeads = () => {
+    if (leadsTimer) return
+    leadsTimer = setTimeout(() => {
+      leadsTimer = null
+      emit({ leads: [...leads.values()] })
+    }, 150)
+  }
   const fail = (err: unknown) => emit({ ready: true, error: (err as Error)?.message ?? String(err) })
 
   async function loadAll() {
@@ -135,10 +142,14 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
   })
 
   // Catch anything missed while the phone was asleep or a lead was reassigned away.
+  // Live updates keep the map current. A full reload (several MB with a big list) only
+  // runs after the app sat in the background a while, and as a slow safety net.
+  let hiddenAt = 0
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') loadAll()
+    if (document.visibilityState === 'hidden') hiddenAt = Date.now()
+    else if (hiddenAt && Date.now() - hiddenAt > 3 * 60_000) loadAll()
   })
-  setInterval(() => document.visibilityState === 'visible' && loadAll(), 5 * 60_000)
+  setInterval(() => document.visibilityState === 'visible' && loadAll(), 30 * 60_000)
 
   const check = <T,>(r: { error: unknown; data?: T | null }) => {
     if (r.error) throw r.error
@@ -208,30 +219,39 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       emitLeads()
     },
     async importList(name, rows) {
-      const list = check<Row>(await sb.from('lead_lists').insert({ name, created_by: userId }).select().single())
-      for (let i = 0; i < rows.length; i += 500) {
-        check(
-          await sb.from('leads').insert(
-            rows.slice(i, i + 500).map((l) => ({
-              list_id: list.id,
-              prefix: l.prefix,
-              first_name: l.firstName,
-              last_name: l.lastName,
-              address: l.address,
-              city: l.city,
-              state: l.state,
-              zip: l.zip,
-              county: l.county,
-              phone: l.phone,
-              dob: l.dob,
-              lat: l.lat,
-              lng: l.lng,
-              assigned_to: l.assignedTo,
-            })),
-          ),
-        )
+      // Same list name = keep adding to that list (this is how an interrupted import resumes).
+      let list = snapshot.lists.find((l) => l.name.trim().toLowerCase() === name.trim().toLowerCase())
+      if (!list) {
+        list = toList(check<Row>(await sb.from('lead_lists').insert({ name, created_by: userId }).select().single()))
+        emit({ lists: [list, ...snapshot.lists] })
       }
-      await loadAll()
+      for (let i = 0; i < rows.length; i += 500) {
+        const inserted = check<Row[]>(
+          await sb
+            .from('leads')
+            .insert(
+              rows.slice(i, i + 500).map((l) => ({
+                list_id: list!.id,
+                prefix: l.prefix,
+                first_name: l.firstName,
+                last_name: l.lastName,
+                address: l.address,
+                city: l.city,
+                state: l.state,
+                zip: l.zip,
+                county: l.county,
+                phone: l.phone,
+                dob: l.dob,
+                lat: l.lat,
+                lng: l.lng,
+                assigned_to: l.assignedTo,
+              })),
+            )
+            .select(),
+        )
+        for (const r of inserted) leads.set(r.id, toLead(r))
+        emitLeads()
+      }
     },
     async deleteList(listId) {
       check(await sb.from('lead_lists').delete().eq('id', listId))
