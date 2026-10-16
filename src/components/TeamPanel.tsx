@@ -30,7 +30,7 @@ const COLUMNS: { key: SortKey; label: string; title: string }[] = [
 export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props) {
   const isManager = snap.me?.role === 'manager'
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [period, setPeriod] = useState<Period>('today')
+  const [period, setPeriod] = useState<Period>('month')
   const [sortKey, setSortKey] = useState<SortKey>('appts')
   const [fetched, setFetched] = useState<{ period: Period; acts: Activity[] } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)

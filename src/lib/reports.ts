@@ -4,10 +4,10 @@ import { STATUS } from './dispositions'
 export type Period = 'today' | 'week' | 'lastWeek' | 'month' | 'lastMonth'
 
 export const PERIODS: { key: Period; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: 'week', label: 'This week' },
-  { key: 'lastWeek', label: 'Last week' },
   { key: 'month', label: 'This month' },
+  { key: 'week', label: 'This week' },
+  { key: 'today', label: 'Today' },
+  { key: 'lastWeek', label: 'Last week' },
   { key: 'lastMonth', label: 'Last month' },
 ]
 
@@ -27,8 +27,9 @@ export function periodRange(p: Period, now = new Date()): { from: Date; to: Date
       return { from, to: monday, label: `${fmt(from)} – ${fmt(addDays(monday, -1))}` }
     }
     case 'month': {
+      // Month to date: the 1st through today (not the last 30 days).
       const from = new Date(now.getFullYear(), now.getMonth(), 1)
-      return { from, to: new Date(now.getFullYear(), now.getMonth() + 1, 1), label: from.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) }
+      return { from, to: addDays(day, 1), label: `${fmt(from)} – ${fmt(day)} (month to date)` }
     }
     case 'lastMonth': {
       const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
