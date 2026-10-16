@@ -33,6 +33,9 @@ const toActivity = (r: Row): Activity => ({
   id: r.id,
   leadId: r.lead_id ?? '',
   leadLabel: r.lead_label ?? '',
+  dueAt: r.due_at ?? null,
+  resolvedAt: r.resolved_at ?? null,
+  resolution: r.resolution ?? null,
   memberId: r.member_id,
   channel: r.channel,
   outcome: r.outcome,
@@ -62,7 +65,7 @@ async function selectAll(sb: SupabaseClient, table: string, build?: (q: any) => 
 export function createSupabaseStore(url: string, anonKey: string): Store {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } })
   const listeners = new Set<() => void>()
-  let snapshot: Snapshot = { ready: false, me: null, members: [], leads: [], activities: [], lists: [], error: null }
+  let snapshot: Snapshot = { ready: false, me: null, members: [], leads: [], activities: [], lists: [], error: null, agendaReady: false }
   let leads = new Map<string, Lead>()
   let channel: ReturnType<SupabaseClient['channel']> | null = null
   let userId: string | null = null
@@ -88,11 +91,12 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
     if (!userId) return
     try {
       const since = new Date(Date.now() - RECENT_DAYS * 86400_000).toISOString()
-      const [members, leadRows, acts, lists] = await Promise.all([
+      const [members, leadRows, acts, lists, version] = await Promise.all([
         selectAll(sb, 'profiles'),
         selectAll(sb, 'leads'),
         selectAll(sb, 'activities', (q) => q.gte('created_at', since).order('created_at', { ascending: false })),
         selectAll(sb, 'lead_lists', (q) => q.order('created_at', { ascending: false })),
+        sb.rpc('knockroute_version').then((r) => (r.error ? 0 : Number(r.data))),
       ])
       leads = new Map(leadRows.map((r) => [r.id, toLead(r)]))
       const memberList = members.map(toMember)
@@ -104,6 +108,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         leads: [...leads.values()],
         activities: acts.map(toActivity),
         lists: lists.map(toList),
+        agendaReady: version >= 4,
       })
     } catch (err) {
       fail(err)
@@ -128,6 +133,12 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities' }, (p) => {
         const a = toActivity(p.new as Row)
         if (!snapshot.activities.some((x) => x.id === a.id)) emit({ activities: [a, ...snapshot.activities] })
+      })
+      // Follow-ups/appointments being updated (booked, sold…) arrive as updates.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'activities' }, (p) => {
+        const a = toActivity(p.new as Row)
+        const has = snapshot.activities.some((x) => x.id === a.id)
+        emit({ activities: has ? snapshot.activities.map((x) => (x.id === a.id ? a : x)) : [a, ...snapshot.activities], itemsVersion: (snapshot.itemsVersion ?? 0) + 1 })
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAll())
       .subscribe()
@@ -198,10 +209,14 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       )
       return rows.map(toActivity)
     },
-    async logActivity(leadId, outcome, notes) {
+    async logActivity(leadId, outcome, notes, dueAt) {
       if (outcome !== 'no_answer' && !notes.trim()) throw new Error('Add a note before submitting')
       const row = check<Row>(
-        await sb.from('activities').insert({ lead_id: leadId, channel: 'door', outcome, notes }).select().single(),
+        await sb
+          .from('activities')
+          .insert({ lead_id: leadId, channel: 'door', outcome, notes, ...(dueAt && snapshot.agendaReady ? { due_at: dueAt } : {}) })
+          .select()
+          .single(),
       )
       // Show it right away; the live update confirms it for everyone else.
       const a = toActivity(row)
@@ -210,6 +225,17 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         leads.set(leadId, { ...l, status: outcome, attempts: l.attempts + 1, lastActivityAt: a.createdAt, lastActivityBy: a.memberId })
       }
       emit({ activities: [a, ...snapshot.activities.filter((x) => x.id !== a.id)], leads: [...leads.values()] })
+    },
+    async openItems() {
+      if (!snapshot.agendaReady) return []
+      const rows = await selectAll(sb, 'activities', (q) =>
+        q.not('due_at', 'is', null).is('resolved_at', null).not('lead_id', 'is', null).order('due_at', { ascending: true }),
+      )
+      return rows.map(toActivity)
+    },
+    async resolveItem(itemId, result, notes, nextDueAt) {
+      check(await sb.rpc('resolve_item', { item: itemId, result, note: notes, next_due: nextDueAt ?? null }))
+      await loadAll()
     },
     async activitiesBetween(from, to) {
       const rows = await selectAll(sb, 'activities', (q) =>

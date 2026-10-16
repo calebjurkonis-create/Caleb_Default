@@ -20,6 +20,7 @@ const PATHS = {
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
   filter: 'M22 3H2l8 9.46V19l4 2v-8.54L22 3z',
   arrow: 'M5 12h14M12 5l7 7-7 7',
+  calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
 } as const
 
 export type IconName = keyof typeof PATHS

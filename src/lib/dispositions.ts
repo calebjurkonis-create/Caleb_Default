@@ -17,6 +17,7 @@ export const STATUS: Record<LeadStatus, StatusInfo> = {
   appointment: { label: 'Appointment', color: 'var(--st-appt)', closed: true },
   not_interested: { label: 'Not Interested', color: 'var(--st-notint)', closed: true },
   bad_info: { label: 'Bad Info', color: 'var(--st-bad)', closed: true },
+  sold: { label: 'Sold', color: 'var(--st-sold)', closed: true },
 }
 
 /**
@@ -25,7 +26,23 @@ export const STATUS: Record<LeadStatus, StatusInfo> = {
  */
 export const OUTCOMES: Outcome[] = ['no_answer', 'appointment', 'follow_up', 'not_interested', 'bad_info']
 
-export const STATUS_ORDER: LeadStatus[] = ['new', ...OUTCOMES]
+export const STATUS_ORDER: LeadStatus[] = ['new', ...OUTCOMES, 'sold']
+
+/** Dispositions that create an agenda item with a date. */
+export const DATED: Outcome[] = ['appointment', 'follow_up']
+
+/** What an open follow-up or appointment can be updated to. */
+export const RESOLUTIONS: Partial<Record<Outcome, { outcome: Outcome; label: string; needsDate?: boolean }[]>> = {
+  follow_up: [
+    { outcome: 'appointment', label: 'Booked', needsDate: true },
+    { outcome: 'not_interested', label: 'Not Interested' },
+  ],
+  appointment: [
+    { outcome: 'sold', label: 'Sold' },
+    { outcome: 'follow_up', label: 'Follow-Up', needsDate: true },
+    { outcome: 'not_interested', label: 'Not Interested' },
+  ],
+}
 
 /** Resolves a status color token to a concrete color (Leaflet canvas markers need real values). */
 export function statusColor(status: LeadStatus): string {

@@ -8,14 +8,17 @@ import { MapView, type MapHandle } from './components/MapView'
 import { MorePanel } from './components/MorePanel'
 import { RoutePanel } from './components/RoutePanel'
 import { TeamPanel } from './components/TeamPanel'
+import { AgendaPanel } from './components/AgendaPanel'
+import { PeekCard } from './components/PeekCard'
+import { dueNowCount } from './lib/agenda'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
 import { STATUS, STATUS_ORDER } from './lib/dispositions'
 import { activeClaim } from './lib/leads'
 import { effectiveRoadKey, orderByRoads, roadPath, type RoadPath } from './lib/roads'
 import { insidePolygon, milesBetween, optimizeOrder, type NavApp, type Point } from './lib/route'
-import type { Lead, LeadStatus, Outcome } from './types'
+import type { Activity, Lead, LeadStatus, Outcome } from './types'
 
-type Tab = 'map' | 'route' | 'leads' | 'team' | 'more'
+type Tab = 'map' | 'route' | 'leads' | 'agenda' | 'team' | 'more'
 type MapFilter = 'all' | 'open' | 'new' | 'callbacks' | 'appointments'
 
 /** One-tap presets. Each one sets which dispositions show; the color key below fine-tunes them. */
@@ -80,6 +83,8 @@ function Field({ store }: { store: Store }) {
 
   const [tab, setTab] = useState<Tab>('map')
   const [openId, setOpenId] = useState<string | null>(null)
+  // Tapping a pin shows a quick look first; the full lead opens from there.
+  const [peekId, setPeekId] = useState<string | null>(null)
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [drawing, setDrawing] = useState(false)
   // Dispositions hidden on the map, remembered on this phone. Empty = show everything.
@@ -145,6 +150,29 @@ function Field({ store }: { store: Store }) {
     [routeLeads, route],
   )
   const openLead = openId ? byId.get(openId) ?? null : null
+  const peekLead = !openLead && peekId ? byId.get(peekId) ?? null : null
+  const overlay = !!(openLead || peekLead)
+
+  // Open appointments and follow-ups. Agents only get their own; managers get everyone's.
+  const [items, setItems] = useState<Activity[] | null>(null)
+  const [itemsError, setItemsError] = useState<string | null>(null)
+  const latestActivity = snap.activities[0]?.id
+  useEffect(() => {
+    if (!snap.agendaReady) return
+    let live = true
+    store
+      .openItems()
+      .then((all) => {
+        if (!live) return
+        setItems(isManager ? all : all.filter((i) => i.memberId === me.id))
+        setItemsError(null)
+      })
+      .catch((e) => live && setItemsError((e as Error).message))
+    return () => {
+      live = false
+    }
+  }, [store, snap.agendaReady, snap.itemsVersion, latestActivity, isManager, me.id])
+  const myDue = useMemo(() => dueNowCount((items ?? []).filter((i) => i.memberId === me.id)), [items, me.id])
 
   // No leads yet (a fresh demo or a brand-new office): start the map where the person is.
   const centeredOnMe = useRef(false)
@@ -326,6 +354,7 @@ function Field({ store }: { store: Store }) {
   }
 
   function openFromList(l: Lead) {
+    setPeekId(null)
     setOpenId(l.id)
     setTab('map')
     if (l.lat != null) mapRef.current?.flyTo(l as Point)
@@ -339,6 +368,7 @@ function Field({ store }: { store: Store }) {
     { key: 'map', label: 'Map', icon: 'map' },
     { key: 'route', label: 'Route', icon: 'route', badge: remaining || undefined },
     { key: 'leads', label: 'Leads', icon: 'list' },
+    { key: 'agenda', label: 'Agenda', icon: 'calendar', badge: myDue || undefined },
     { key: 'team', label: 'Team', icon: 'team' },
     { key: 'more', label: 'More', icon: 'more' },
   ]
@@ -365,11 +395,11 @@ function Field({ store }: { store: Store }) {
           roadLine={roadLine?.line}
           doneStops={doneStops}
           me={here}
-          focusId={openId}
+          focusId={openId ?? peekId}
           drawing={drawing}
           satellite={satellite}
           themeKey={themeKey}
-          onTap={(l) => !placingId && setOpenId(l.id)}
+          onTap={(l) => { if (!placingId) { setOpenId(null); setPeekId(l.id) } }}
           onMapTap={
             placingId
               ? async (p) => {
@@ -400,7 +430,7 @@ function Field({ store }: { store: Store }) {
         </div>
 
         <div className="map-tools">
-          <button className="tool stack" aria-pressed={drawing} onClick={() => { setDrawing(!drawing); setOpenId(null); setTab('map') }} aria-label="Draw around leads">
+          <button className="tool stack" aria-pressed={drawing} onClick={() => { setDrawing(!drawing); setOpenId(null); setPeekId(null); setTab('map') }} aria-label="Draw around leads">
             <Icon name="lasso" />
             <span className="tool-label">{drawing ? 'Cancel' : 'Draw'}</span>
           </button>
@@ -413,7 +443,7 @@ function Field({ store }: { store: Store }) {
         </div>
 
         {drawing && <div className="draw-hint">Drag a loop around the houses</div>}
-        {snap.ready && visible.length === 0 && tab === 'map' && !openLead && !importing && (
+        {snap.ready && visible.length === 0 && tab === 'map' && !overlay && !importing && (
           <div className="banner">
             <h3>No leads on the map yet</h3>
             <div className="muted">
@@ -439,7 +469,7 @@ function Field({ store }: { store: Store }) {
           </div>
         )}
 
-        {!drawing && selection.size > 0 && !openLead && (
+        {!drawing && selection.size > 0 && !overlay && (
           <div className="banner">
             <div className="banner-row">
               <h3 className="num" style={{ flex: 1 }}>
@@ -477,7 +507,7 @@ function Field({ store }: { store: Store }) {
           </div>
         )}
 
-        {!drawing && !placingId && selection.size === 0 && !openLead && tab === 'map' && visible.length > 0 && (
+        {!drawing && !placingId && selection.size === 0 && !overlay && tab === 'map' && visible.length > 0 && (
           <div className="legend" role="group" aria-label="Show or hide pins by disposition">
             <span className="legend-hint">Tap to show/hide</span>
             {STATUS_ORDER.map((s) => (
@@ -509,7 +539,20 @@ function Field({ store }: { store: Store }) {
           />
         )}
 
-        {!openLead && tab === 'route' && (
+        {peekLead && (
+          <PeekCard
+            store={store}
+            snap={snap}
+            lead={peekLead}
+            onRoute={!!route?.ids.includes(peekLead.id)}
+            navApp={navApp}
+            onClose={() => setPeekId(null)}
+            onOpen={() => { setOpenId(peekLead.id); setPeekId(null) }}
+            onToggleRoute={() => toggleOnRoute(peekLead)}
+          />
+        )}
+
+        {!overlay && tab === 'route' && (
           <RoutePanel
             road={roadLine ? { miles: roadLine.miles, minutes: roadLine.minutes } : null}
             planning={routing}
@@ -519,7 +562,7 @@ function Field({ store }: { store: Store }) {
             navApp={navApp}
             openCount={visible.filter(routable).length}
             onClose={() => setTab('map')}
-            onOpenLead={(l) => { setOpenId(l.id); if (l.lat != null) mapRef.current?.flyTo(l as Point) }}
+            onOpenLead={(l) => { setPeekId(null); setOpenId(l.id); if (l.lat != null) mapRef.current?.flyTo(l as Point) }}
             onRemove={(id) => { const l = byId.get(id); if (l) toggleOnRoute(l) }}
             onReoptimize={reoptimize}
             onEnd={endRoute}
@@ -527,8 +570,19 @@ function Field({ store }: { store: Store }) {
             onDraw={() => { setTab('map'); setDrawing(true) }}
           />
         )}
-        {!openLead && tab === 'leads' && <LeadsPanel snap={snap} leads={visible} me={here} onClose={() => setTab('map')} onOpenLead={openFromList} />}
-        {!openLead && tab === 'team' && !importing && (
+        {!overlay && tab === 'leads' && <LeadsPanel snap={snap} leads={visible} me={here} onClose={() => setTab('map')} onOpenLead={openFromList} />}
+        {!overlay && tab === 'agenda' && (
+          <AgendaPanel
+            store={store}
+            snap={snap}
+            items={items}
+            error={itemsError}
+            onClose={() => setTab('map')}
+            onOpenLead={openFromList}
+            onUpdated={flash}
+          />
+        )}
+        {!overlay && tab === 'team' && !importing && (
           <TeamPanel store={store} snap={snap} onClose={() => setTab('map')} onOpenLead={openFromList} onImport={() => setImporting(true)} />
         )}
         {importing && (
@@ -539,7 +593,7 @@ function Field({ store }: { store: Store }) {
             onDone={(msg) => { setImporting(false); setTab('map'); setHiddenList([]); flash(msg); mapRef.current?.fit(visible.filter((l) => l.lat != null) as Point[]) }}
           />
         )}
-        {!openLead && tab === 'more' && (
+        {!overlay && tab === 'more' && (
           <MorePanel store={store} snap={snap} navApp={navApp} satellite={satellite} onNavApp={setNavApp} onSatellite={setSatellite} onClose={() => setTab('map')} roadKey={roadKey} onRoadKey={setRoadSetting} />
         )}
       </div>
@@ -549,8 +603,8 @@ function Field({ store }: { store: Store }) {
           <button
             key={t.key}
             className="tab"
-            aria-current={tab === t.key && !openLead ? 'page' : undefined}
-            onClick={() => { setOpenId(null); setDrawing(false); setImporting(false); setTab(tab === t.key && t.key !== 'map' ? 'map' : t.key) }}
+            aria-current={tab === t.key && !overlay ? 'page' : undefined}
+            onClick={() => { setOpenId(null); setPeekId(null); setDrawing(false); setImporting(false); setTab(tab === t.key && t.key !== 'map' ? 'map' : t.key) }}
           >
             <Icon name={t.icon} />
             {t.label}

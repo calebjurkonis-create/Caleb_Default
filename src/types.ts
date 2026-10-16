@@ -6,7 +6,8 @@ export interface Member {
   role: Role
 }
 
-export type Channel = 'door' | 'phone'
+/** 'update' = a status change on an earlier follow-up/appointment (not a door knock). */
+export type Channel = 'door' | 'phone' | 'update'
 
 /** Mirrors the "Next disposition" list in OSCR. */
 export type Outcome =
@@ -17,6 +18,8 @@ export type Outcome =
   | 'not_interested'
   | 'info_requested'
   | 'bad_info'
+  /** Only reached by updating an appointment, never on a door knock. */
+  | 'sold'
 
 export type LeadStatus = 'new' | Outcome
 
@@ -60,6 +63,11 @@ export interface Activity {
   outcome: Outcome
   notes: string
   createdAt: string
+  /** Follow-ups and appointments: when it's due. */
+  dueAt: string | null
+  /** Set once the follow-up/appointment has been updated (booked, sold, not interested…). */
+  resolvedAt: string | null
+  resolution: Outcome | null
 }
 
 export interface LeadList {

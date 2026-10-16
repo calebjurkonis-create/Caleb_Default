@@ -15,7 +15,8 @@
     "papaparse": "^5.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "read-excel-file": "^5.8.8"
+    "read-excel-file": "^5.8.8",
+    "write-excel-file": "^2.3.10"
   },
   "devDependencies": {
     "@types/leaflet": "1.9",

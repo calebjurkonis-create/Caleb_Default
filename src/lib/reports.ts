@@ -45,6 +45,8 @@ export interface AgentRow {
   followUps: number
   notInterested: number
   noAnswer: number
+  /** Appointments closed as Sold (from status updates). */
+  sold: number
   /** Good outcomes when someone answers: appointments + follow-ups. */
   positive: number
   /** Bad outcome when someone answers: not interested. */
@@ -72,26 +74,43 @@ export function agentRows(acts: Activity[], members: Member[]): AgentRow[] {
   const row = (id: string) => {
     let r = rows.get(id)
     if (!r) {
-      r = { id, name: members.find((m) => m.id === id)?.name || 'Former teammate', doors: 0, appts: 0, followUps: 0, notInterested: 0, noAnswer: 0, positive: 0, negative: 0, ratio: -1 }
+      r = { id, name: members.find((m) => m.id === id)?.name || 'Former teammate', doors: 0, appts: 0, followUps: 0, notInterested: 0, noAnswer: 0, sold: 0, positive: 0, negative: 0, ratio: -1 }
       rows.set(id, r)
     }
     return r
   }
   for (const m of members) row(m.id)
+  // The +/- ratio only looks at answered doors, so status updates don't skew it.
+  const doorPos = new Map<string, number>()
+  const doorNeg = new Map<string, number>()
+  const bump = (m: Map<string, number>, id: string) => m.set(id, (m.get(id) ?? 0) + 1)
   for (const a of acts) {
     const r = row(a.memberId)
-    r.doors++
+    const atDoor = a.channel !== 'update'
+    if (atDoor) r.doors++
     if (a.outcome === 'appointment') r.appts++
     else if (a.outcome === 'follow_up') r.followUps++
     else if (a.outcome === 'not_interested') r.notInterested++
     else if (a.outcome === 'no_answer') r.noAnswer++
+    else if (a.outcome === 'sold') r.sold++
+    if (atDoor && (a.outcome === 'appointment' || a.outcome === 'follow_up')) bump(doorPos, a.memberId)
+    if (atDoor && a.outcome === 'not_interested') bump(doorNeg, a.memberId)
   }
   for (const r of rows.values()) {
-    r.positive = r.appts + r.followUps
-    r.negative = r.notInterested
+    r.positive = doorPos.get(r.id) ?? 0
+    r.negative = doorNeg.get(r.id) ?? 0
     r.ratio = ratioKey(r.positive, r.negative)
   }
   return [...rows.values()]
+}
+
+export function channelLabel(a: Activity): string {
+  return a.channel === 'update' ? 'Status update' : a.channel === 'phone' ? 'Phone call' : 'Door knock'
+}
+
+function dueText(iso: string): string {
+  const d = new Date(iso)
+  return `${d.toLocaleDateString('en-US')} ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
 }
 
 function csv(rows: (string | number)[][]): string {
@@ -105,8 +124,8 @@ function csv(rows: (string | number)[][]): string {
 
 export function leaderboardCsv(rows: AgentRow[]): string {
   return csv([
-    ['Agent', 'Doors knocked', 'Appointments', 'Follow-ups', 'Not interested', 'No answer/Not home', 'Positive (Appts + F/U)', 'Negative (Not interested)', '+/- ratio'],
-    ...rows.map((r) => [r.name, r.doors, r.appts, r.followUps, r.notInterested, r.noAnswer, r.positive, r.negative, r.positive || r.negative ? `${r.positive}:${r.negative}` : '']),
+    ['Agent', 'Doors knocked', 'Appointments', 'Follow-ups', 'Not interested', 'No answer/Not home', 'Sold', 'Positive at the door (Appts + F/U)', 'Negative at the door (Not interested)', '+/- ratio'],
+    ...rows.map((r) => [r.name, r.doors, r.appts, r.followUps, r.notInterested, r.noAnswer, r.sold, r.positive, r.negative, r.positive || r.negative ? `${r.positive}:${r.negative}` : '']),
   ])
 }
 
@@ -114,7 +133,7 @@ export function dispositionsCsv(acts: Activity[], members: Member[], leads: Map<
   const name = (id: string) => members.find((m) => m.id === id)?.name || 'Former teammate'
   const listName = (id: string | undefined) => lists.find((l) => l.id === id)?.name ?? ''
   return csv([
-    ['Date', 'Time', 'Agent', 'Disposition', 'Notes', 'First name', 'Last name', 'Address', 'City', 'ZIP', 'County', 'Lead list'],
+    ['Date', 'Time', 'Agent', 'Type', 'Disposition', 'Appointment / follow-up date', 'Notes', 'First name', 'Last name', 'Address', 'City', 'ZIP', 'County', 'Lead list'],
     ...[...acts]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((a) => {
@@ -127,7 +146,9 @@ export function dispositionsCsv(acts: Activity[], members: Member[], leads: Map<
           d.toLocaleDateString('en-US'),
           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           name(a.memberId),
+          channelLabel(a),
           STATUS[a.outcome].label,
+          a.dueAt ? dueText(a.dueAt) : '',
           a.notes,
           l ? l.firstName : first ?? '',
           l ? l.lastName : rest.join(' '),
@@ -145,8 +166,9 @@ export function dispositionsCsv(acts: Activity[], members: Member[], leads: Map<
  * Hands a file to the phone: the share sheet on iPhone/Android (Save to Files, Mail,
  * AirDrop…), or a normal download on a computer. Returns false if the person cancelled.
  */
-export async function saveFile(filename: string, text: string): Promise<boolean> {
-  const file = new File([text], filename, { type: 'text/csv' })
+export async function saveFile(filename: string, data: string | Blob): Promise<boolean> {
+  const type = typeof data === 'string' ? 'text/csv' : data.type || 'application/octet-stream'
+  const file = new File([data], filename, { type })
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
   if (nav.canShare?.({ files: [file] }) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
     try {

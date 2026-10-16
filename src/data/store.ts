@@ -22,6 +22,10 @@ export interface Snapshot {
   error: string | null
   /** Signed in with a temporary password a manager set up; must pick their own first. */
   mustChangePassword?: boolean
+  /** Follow-up/appointment dates and status updates are available (database update 004 applied). */
+  agendaReady: boolean
+  /** Bumped when a follow-up/appointment is updated, so open agenda lists refresh. */
+  itemsVersion?: number
 }
 
 export interface Store {
@@ -40,7 +44,14 @@ export interface Store {
 
   history(leadId: string): Promise<Activity[]>
   /** Logs a door knock. Notes are required except for No Answer/Not Home. */
-  logActivity(leadId: string, outcome: Outcome, notes: string): Promise<void>
+  logActivity(leadId: string, outcome: Outcome, notes: string, dueAt?: string | null): Promise<void>
+  /** Open follow-ups and appointments the viewer can see, soonest first. */
+  openItems(): Promise<Activity[]>
+  /**
+   * Updates an open follow-up/appointment (e.g. Booked, Sold, Not Interested). Logs the
+   * update as its own entry, so the lead's status and history move forward.
+   */
+  resolveItem(itemId: string, result: Outcome, notes: string, nextDueAt?: string | null): Promise<void>
   /** Every disposition the viewer can see between two times, newest first (for reports). */
   activitiesBetween(from: Date, to: Date): Promise<Activity[]>
   claim(leadIds: string[], on: boolean): Promise<void>

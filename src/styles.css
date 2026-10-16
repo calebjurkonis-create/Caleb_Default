@@ -24,6 +24,7 @@
   --st-appt: #1f9455;
   --st-notint: #7b8794;
   --st-bad: #d14343;
+  --st-sold: #0b7a6f;
 
   --f-display: 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --f-body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -55,6 +56,7 @@
     --st-appt: #39b26f;
     --st-notint: #8d99a6;
     --st-bad: #ec6161;
+    --st-sold: #3cc7b6;
     color-scheme: dark;
   }
 }
@@ -357,3 +359,16 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 }
 .legend-item[aria-pressed='false'] { color: var(--muted); text-decoration: line-through; opacity: 0.55; }
 .legend-item[aria-pressed='false'] .dot { background: transparent !important; border-color: var(--muted); box-shadow: none; }
+/* Quick look after tapping a pin */
+.sheet.peek { max-height: 62%; }
+.peek-title { border: 0; background: none; padding: 0; text-align: left; }
+.sheet.peek .row > .btn { flex: 1 1 120px; white-space: nowrap; }
+input[type='datetime-local'] {
+  width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 12px; font-size: 16px; min-height: 48px;
+}
+/* Agenda */
+.agenda-item { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
+.agenda-item .when { font-family: var(--f-display); font-weight: 700; font-size: 18px; }
+.agenda-item.overdue .when { color: var(--danger); }
+.agenda-item .lead-link { border: 0; background: none; padding: 0; text-align: left; font-weight: 600; font-size: 16px; text-decoration: underline; text-underline-offset: 2px; }
+.bucket-head { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }

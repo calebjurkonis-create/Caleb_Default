@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { memberName, type Snapshot, type Store } from '../data/store'
-import { OUTCOMES, STATUS } from '../lib/dispositions'
+import { DATED, OUTCOMES, STATUS } from '../lib/dispositions'
+import { dueLabel, fromLocalInput } from '../lib/agenda'
+import { ItemUpdate } from './ItemUpdate'
 import { activeClaim, cityLine, clockTime, formatPhone, fullName, houseNumberOf, navTarget, timeAgo, turning65 } from '../lib/leads'
 import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead, Outcome } from '../types'
@@ -23,6 +25,7 @@ interface Props {
 export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggleRoute, onSaved, onPlacePin }: Props) {
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [notes, setNotes] = useState('')
+  const [due, setDue] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<Activity[] | null>(null)
@@ -34,6 +37,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
   useEffect(() => {
     setOutcome(null)
     setNotes('')
+    setDue('')
     setError(null)
   }, [lead.id])
   useEffect(() => {
@@ -42,7 +46,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
     return () => {
       live = false
     }
-  }, [store, lead.id, lead.attempts])
+  }, [store, lead.id, lead.attempts, lead.status, lead.lastActivityAt, snap.itemsVersion])
 
   const age = turning65(lead.dob)
   const claim = activeClaim(lead)
@@ -52,16 +56,20 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
   // Every disposition needs a note except No Answer/Not Home.
   const noteRequired = outcome !== 'no_answer'
   const noteMissing = noteRequired && !notes.trim()
+  // Appointments and follow-ups get a date (once the database supports it).
+  const needsDate = snap.agendaReady && !!outcome && DATED.includes(outcome)
+  const dateMissing = needsDate && !fromLocalInput(due)
 
   async function save() {
-    if (!outcome || noteMissing) return
+    if (!outcome || noteMissing || dateMissing) return
     setSaving(true)
     setError(null)
     try {
-      await store.logActivity(lead.id, outcome, notes.trim())
+      await store.logActivity(lead.id, outcome, notes.trim(), needsDate ? fromLocalInput(due) : null)
       onSaved(lead, outcome)
       setOutcome(null)
       setNotes('')
+      setDue('')
     } catch (e) {
       setError(`Couldn't save: ${(e as Error).message}. Check your signal and tap Submit again.`)
     } finally {
@@ -168,6 +176,8 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           )}
         </div>
 
+        <OpenItem store={store} snap={snap} history={history} />
+
         <div className="section">
           <h3 style={{ fontSize: 20 }}>Door knock disposition</h3>
           <div className="outcomes" role="group" aria-label="Next disposition">
@@ -178,6 +188,12 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
               </button>
             ))}
           </div>
+          {needsDate && (
+            <label className="field">
+              {outcome === 'appointment' ? 'Appointment date & time' : 'Follow-up date & time'}
+              <input id={`due-${lead.id}`} type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} required />
+            </label>
+          )}
           <label className="field">
             {outcome === 'no_answer' ? 'Notes (optional)' : 'Notes (required)'}
             <textarea
@@ -189,14 +205,16 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
             />
           </label>
           {error && <div className="err">{error}</div>}
-          <button className="btn primary block" disabled={!outcome || noteMissing || saving} onClick={save}>
+          <button className="btn primary block" disabled={!outcome || noteMissing || dateMissing || saving} onClick={save}>
             {saving
               ? 'Saving…'
               : !outcome
                 ? 'Pick a disposition'
-                : noteMissing
-                  ? 'Add a note to submit'
-                  : `Submit · ${STATUS[outcome].label}`}
+                : dateMissing
+                  ? `Pick the ${outcome === 'appointment' ? 'appointment' : 'follow-up'} date`
+                  : noteMissing
+                    ? 'Add a note to submit'
+                    : `Submit · ${STATUS[outcome].label}`}
           </button>
         </div>
 
@@ -222,32 +240,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
 
         <div className="section">
           <h3 style={{ fontSize: 20 }}>History</h3>
-          {history === null ? (
-            <div className="muted">Loading…</div>
-          ) : history.length === 0 ? (
-            <div className="muted">Nobody has worked this lead yet.</div>
-          ) : (
-            <ol className="timeline">
-              {history.map((a) => (
-                <li key={a.id}>
-                  <span className="dot" style={{ background: STATUS[a.outcome].color }} />
-                  <div>
-                    <div>
-                      <span className="who">{memberName(snap, a.memberId)}</span>{' '}
-                      <span className="muted">
-                        · {a.channel === 'phone' ? 'Phone call' : 'Door knock'} · {STATUS[a.outcome].label}
-                      </span>
-                    </div>
-                    <div className="muted" style={{ fontSize: 13 }}>
-                      {new Date(a.createdAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-                      {clockTime(a.createdAt)}
-                    </div>
-                    {a.notes && <div className="note">“{a.notes}”</div>}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
+          <HistoryList snap={snap} history={history} />
         </div>
       </div>
     </section>
@@ -344,5 +337,63 @@ function PinTools({ store, lead, onPlacePin }: { store: Store; lead: Lead; onPla
       )}
       {msg && <div className="muted">{msg}</div>}
     </div>
+  )
+}
+
+/** The lead's open follow-up or appointment, with its status buttons (its agent and managers only). */
+function OpenItem({ store, snap, history }: { store: Store; snap: Snapshot; history: Activity[] | null }) {
+  const [msg, setMsg] = useState<string | null>(null)
+  const item = history?.find((a) => a.dueAt && !a.resolvedAt)
+  const isManager = snap.me?.role === 'manager'
+  if (!item || !snap.agendaReady) return msg ? <div className="notice">{msg}</div> : null
+  if (item.memberId !== snap.me?.id && !isManager) return null
+  return (
+    <div className="card" style={{ borderColor: STATUS[item.outcome].color }}>
+      <div>
+        <span className="eyebrow">Open {item.outcome === 'appointment' ? 'appointment' : 'follow-up'}</span>
+        <div style={{ fontWeight: 600, fontSize: 18 }}>{dueLabel(item.dueAt!)}</div>
+        <div className="muted" style={{ fontSize: 14 }}>
+          Set by {memberName(snap, item.memberId)}
+          {item.notes && ` · “${item.notes}”`}
+        </div>
+      </div>
+      <ItemUpdate store={store} item={item} onDone={(m) => setMsg(m)} />
+    </div>
+  )
+}
+
+/** Every visit and status update on a lead, newest first. */
+export function HistoryList({ snap, history, limit }: { snap: Snapshot; history: Activity[] | null; limit?: number }) {
+  if (history === null) return <div className="muted">Loading…</div>
+  if (history.length === 0) return <div className="muted">Nobody has worked this lead yet.</div>
+  const isManager = snap.me?.role === 'manager'
+  const shown = limit ? history.slice(0, limit) : history
+  return (
+    <>
+      <ol className="timeline">
+        {shown.map((a) => (
+          <li key={a.id}>
+            <span className="dot" style={{ background: STATUS[a.outcome].color }} />
+            <div>
+              <div>
+                <span className="who">{memberName(snap, a.memberId)}</span>{' '}
+                <span className="muted">
+                  · {a.channel === 'update' ? 'Status update' : a.channel === 'phone' ? 'Phone call' : 'Door knock'} · {STATUS[a.outcome].label}
+                </span>
+              </div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                {new Date(a.createdAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                {clockTime(a.createdAt)}
+                {a.dueAt && (a.memberId === snap.me?.id || isManager) && (
+                  <> · {a.outcome === 'appointment' ? 'Appt' : 'Due'} {dueLabel(a.dueAt)}{a.resolution ? ` → ${STATUS[a.resolution].label}` : ''}</>
+                )}
+              </div>
+              {a.notes && <div className="note">“{a.notes}”</div>}
+            </div>
+          </li>
+        ))}
+      </ol>
+      {limit && history.length > limit && <div className="muted" style={{ fontSize: 13 }}>{history.length - limit} older…</div>}
+    </>
   )
 }

@@ -6,6 +6,7 @@ import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PER
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
+import { buildBackup, lastBackupAt, markBackedUp } from '../lib/backup'
 
 interface Props {
   store: Store
@@ -15,13 +16,14 @@ interface Props {
   onImport(): void
 }
 
-type SortKey = 'appts' | 'doors' | 'followUps' | 'notInterested' | 'ratio'
+type SortKey = 'appts' | 'doors' | 'followUps' | 'notInterested' | 'sold' | 'ratio'
 
 const COLUMNS: { key: SortKey; label: string; title: string }[] = [
   { key: 'doors', label: 'DKs', title: 'Doors knocked' },
   { key: 'appts', label: 'Appt', title: 'Appointments' },
   { key: 'followUps', label: 'F/U', title: 'Follow-ups' },
   { key: 'notInterested', label: 'NI', title: 'Not interested' },
+  { key: 'sold', label: 'Sold', title: 'Appointments updated to Sold' },
   { key: 'ratio', label: '+/−', title: 'Appointments + follow-ups against not interested' },
 ]
 
@@ -173,12 +175,13 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={r.id} className={`${r.id === snap.me?.id ? 'me' : ''}${r.doors === 0 ? ' idle' : ''}`}>
-                      <td><span className="rank">{r.doors ? i + 1 : ''}</span>{r.id === snap.me?.id ? 'You' : r.name}</td>
+                    <tr key={r.id} className={`${r.id === snap.me?.id ? 'me' : ''}${r.doors === 0 && r.sold === 0 ? ' idle' : ''}`}>
+                      <td><span className="rank">{r.doors || r.sold ? i + 1 : ''}</span>{r.id === snap.me?.id ? 'You' : r.name}</td>
                       <td>{r.doors}</td>
                       <td>{r.appts}</td>
                       <td>{r.followUps}</td>
                       <td>{r.notInterested}</td>
+                      <td>{r.sold}</td>
                       <td className="ratio">{ratioLabel(r)}</td>
                     </tr>
                   ))}
@@ -187,7 +190,7 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
             </div>
           )}
           <div className="muted" style={{ fontSize: 13 }}>
-            Tap a column to rank by it. DKs = doors knocked · F/U = follow-ups · NI = not interested · +/− = appointments + follow-ups : not interested (only doors that were answered).
+            Tap a column to rank by it. DKs = doors knocked · F/U = follow-ups · NI = not interested · Sold = appointments updated to Sold · +/− = appointments + follow-ups : not interested (only doors that were answered). Appt, F/U and NI include status updates on earlier leads.
           </div>
           {isManager && acts && (
             <div className="row">
@@ -215,7 +218,7 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
                     <span className="dot" style={{ background: STATUS[a.outcome].color }} />
                     <div>
                       <div>
-                        <b>{memberName(snap, a.memberId)}</b> knocked{' '}
+                        <b>{memberName(snap, a.memberId)}</b> {a.channel === 'update' ? 'updated' : 'knocked'}{' '}
                         {lead ? (
                           <button className="link" onClick={() => onOpenLead(lead)}>{shortName(lead)}</button>
                         ) : (
@@ -282,6 +285,8 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
         {isManager && <DoorsOnRoutes store={store} snap={snap} />}
 
         {isManager && <RemoveByMonth store={store} snap={snap} />}
+
+        {isManager && <Backup store={store} snap={snap} />}
 
         {isManager && store.setRole && (
           <div className="section">
@@ -466,6 +471,51 @@ function DoorsOnRoutes({ store, snap }: { store: Store; snap: Snapshot }) {
       <div className="muted" style={{ fontSize: 13 }}>
         Doors also free up on their own 12 hours after a route is planned. Releasing doesn't change anyone's dispositions.
       </div>
+      {msg && <div className="muted" style={{ fontSize: 14 }}>{msg}</div>}
+    </div>
+  )
+}
+
+/** Managers: download everything (leads, every disposition, lists, team) as one Excel file. */
+function Backup({ store, snap }: { store: Store; snap: Snapshot }) {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [last, setLast] = useState(lastBackupAt)
+  const days = last ? Math.floor((Date.now() - last.getTime()) / 86400_000) : null
+
+  async function run() {
+    setBusy(true)
+    setMsg('Gathering everything…')
+    try {
+      const { blob, filename, counts } = await buildBackup(store, snap)
+      const ok = await saveFile(filename, blob)
+      if (ok) {
+        markBackedUp()
+        setLast(new Date())
+        setMsg(`Saved ${filename}: ${counts.leads.toLocaleString()} leads and ${counts.acts.toLocaleString()} dispositions. Keep it in Google Drive, iCloud or email it to yourself.`)
+      } else setMsg(null)
+    } catch (e) {
+      setMsg(`Couldn't make the backup: ${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="section">
+      <h3 style={{ fontSize: 20 }}>Backup</h3>
+      <div className="muted" style={{ fontSize: 14 }}>
+        One Excel file with every lead, every disposition and note, the lead lists and the team. It only reads; nothing changes.
+      </div>
+      {(days == null || days >= 7) && (
+        <div className="notice">{days == null ? 'No backup saved from this phone yet.' : `Last backup was ${days} days ago.`} Once a week is a good habit.</div>
+      )}
+      <button className="btn block" disabled={busy} onClick={run}>
+        <Icon name="download" /> {busy ? 'Making the backup…' : 'Download a backup'}
+      </button>
+      {days != null && days < 7 && (
+        <div className="muted" style={{ fontSize: 13 }}>Last backup from this phone: {days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`}.</div>
+      )}
       {msg && <div className="muted" style={{ fontSize: 14 }}>{msg}</div>}
     </div>
   )

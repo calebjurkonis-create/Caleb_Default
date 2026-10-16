@@ -31,7 +31,7 @@ export interface DemoOptions {
  */
 export function createDemoStore(opts: DemoOptions = {}): Store {
   const guest = opts.guestName
-  const KEY = guest ? 'knockroute-guest-v1' : 'knockroute-demo-v3'
+  const KEY = guest ? 'knockroute-guest-v1' : 'knockroute-demo-v4'
   const MEMBERS: Member[] = guest ? [{ id: 'm-guest', name: guest, role: 'manager' }] : SAMPLE_MEMBERS
   const fresh = (): Saved =>
     guest
@@ -62,6 +62,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       activities: data.activities,
       lists: data.lists,
       error: null,
+      agendaReady: true,
     }
   }
   snapshot = build()
@@ -91,7 +92,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
     data.activities = [a, ...data.activities]
     data.leads = data.leads.map((l) =>
       l.id === a.leadId
-        ? { ...l, status: a.outcome, attempts: l.attempts + 1, lastActivityAt: a.createdAt, lastActivityBy: a.memberId }
+        ? { ...l, status: a.outcome, attempts: l.attempts + (a.channel === 'update' ? 0 : 1), lastActivityAt: a.createdAt, lastActivityBy: a.memberId }
         : l,
     )
   }
@@ -123,6 +124,9 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
           channel: 'door',
           outcome,
           notes: sampleNote(outcome),
+          dueAt: outcome === 'follow_up' || outcome === 'appointment' ? new Date(Date.now() + (1 + Math.floor(Math.random() * 5)) * 86400_000).toISOString() : null,
+          resolvedAt: null,
+          resolution: null,
           createdAt: new Date().toISOString(),
         })
         commit()
@@ -151,10 +155,35 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
     async history(leadId) {
       return data.activities.filter((a) => a.leadId === leadId)
     },
-    async logActivity(leadId, outcome, notes) {
+    async logActivity(leadId, outcome, notes, dueAt) {
       if (!data.meId) return
       if (outcome !== 'no_answer' && !notes.trim()) throw new Error('Add a note before submitting')
-      record({ id: uid(), leadId, leadLabel: labelFor(leadId), memberId: data.meId, channel: 'door', outcome, notes, createdAt: new Date().toISOString() })
+      // A new knock on this door closes any earlier open item for it.
+      const now = new Date().toISOString()
+      data.activities = data.activities.map((a) =>
+        a.leadId === leadId && a.dueAt && !a.resolvedAt ? { ...a, resolvedAt: now, resolution: outcome } : a,
+      )
+      record({
+        id: uid(), leadId, leadLabel: labelFor(leadId), memberId: data.meId, channel: 'door', outcome, notes, createdAt: now,
+        dueAt: dueAt ?? null, resolvedAt: null, resolution: null,
+      })
+      commit()
+    },
+    async openItems() {
+      return data.activities
+        .filter((a) => a.dueAt && !a.resolvedAt && a.leadId && data.leads.some((l) => l.id === a.leadId))
+        .sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))
+    },
+    async resolveItem(itemId, result, notes, nextDueAt) {
+      const item = data.activities.find((a) => a.id === itemId)
+      if (!item || !data.meId) throw new Error('That item no longer exists.')
+      if (item.memberId !== data.meId && data.role !== 'manager') throw new Error('Only the agent who set it, or a manager, can update it.')
+      const now = new Date().toISOString()
+      data.activities = data.activities.map((a) => (a.id === itemId ? { ...a, resolvedAt: now, resolution: result } : a))
+      record({
+        id: uid(), leadId: item.leadId, leadLabel: item.leadLabel, memberId: data.meId, channel: 'update', outcome: result,
+        notes, createdAt: now, dueAt: nextDueAt ?? null, resolvedAt: null, resolution: null,
+      })
       commit()
     },
     async activitiesBetween(from, to) {
