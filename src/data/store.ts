@@ -60,6 +60,8 @@ export interface Store {
   resolveItem(itemId: string, result: Outcome, notes: string, nextDueAt?: string | null): Promise<void>
   /** Managers: mark a gated area, or record a dismissed suggestion (status 'dismissed'). */
   addZone(zone: NewZone): Promise<void>
+  /** Managers: rename a gated area (its outline stays exactly as it is). */
+  renameZone(id: string, name: string): Promise<void>
   /** Managers: remove a gated area. */
   deleteZone(id: string): Promise<void>
   /** Sets or changes the date on an open follow-up/appointment (its agent or a manager). */

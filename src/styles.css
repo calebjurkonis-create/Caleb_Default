@@ -383,3 +383,5 @@ input[type='datetime-local'] {
   color: var(--gated); background: var(--surface); border: 1.5px dashed var(--gated); border-radius: 6px; padding: 1px 6px; opacity: 0.92;
 }
 .tag.gated { border-style: dashed; border-color: var(--gated); }
+.zone-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
+.zone-row .row > .btn { flex: 0 1 auto; }

@@ -269,6 +269,10 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       )
       emit({ zones: await loadZones() })
     },
+    async renameZone(id, name) {
+      check(await sb.from('gated_zones').update({ name }).eq('id', id))
+      emit({ zones: snapshot.zones.map((z) => (z.id === id ? { ...z, name } : z)) })
+    },
     async deleteZone(id) {
       check(await sb.from('gated_zones').delete().eq('id', id))
       emit({ zones: snapshot.zones.filter((z) => z.id !== id) })

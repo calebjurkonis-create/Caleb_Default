@@ -189,6 +189,11 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       data.zones = [...(data.zones ?? []), zone]
       commit()
     },
+    async renameZone(id, name) {
+      if (data.role !== 'manager') throw new Error('Only managers can rename gated areas.')
+      data.zones = (data.zones ?? []).map((z) => (z.id === id ? { ...z, name } : z))
+      commit()
+    },
     async deleteZone(id) {
       if (data.role !== 'manager') throw new Error('Only managers can remove gated areas.')
       data.zones = (data.zones ?? []).filter((z) => z.id !== id)

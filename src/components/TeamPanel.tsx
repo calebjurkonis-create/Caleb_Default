@@ -6,7 +6,6 @@ import type { Activity, GatedZone } from '../types'
 import { Icon } from './Icon'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 import { buildBackup, lastBackupAt, markBackedUp } from '../lib/backup'
-import { zoneLabel } from '../lib/gated'
 import { insidePolygon } from '../lib/route'
 
 interface Props {
@@ -510,7 +509,7 @@ function GatedAreas({ store, snap, onDraw, onFind, onShow }: { store: Store; sna
       ) : (
         <>
           <div className="muted" style={{ fontSize: 14 }}>
-            Outlined on everyone's map. Leads inside stay routable; agents just get a heads-up.
+            Outlined on everyone's map. Leads inside stay routable; agents just get a heads-up. Tap a name to change it; the outline stays the same.
           </div>
           <div className="row">
             <button className="btn small" onClick={onDraw}><Icon name="lasso" /> Draw a gated area</button>
@@ -522,11 +521,29 @@ function GatedAreas({ store, snap, onDraw, onFind, onShow }: { store: Store; sna
           {zones.length > 0 && (
             <ul className="list">
               {zones.map((z) => (
-                <li key={z.id} className="switch" style={{ flexWrap: 'wrap' }}>
-                  <span style={{ minWidth: 0 }}>
-                    <b>{zoneLabel(z)}</b>{' '}
-                    <span className="muted num">· {leadsIn(z)} leads{z.source === 'osm' ? ' · from OpenStreetMap' : ''}</span>
-                  </span>
+                <li key={z.id} className="zone-row">
+                  <div>
+                    <input
+                      id={`zone-name-${z.id}`}
+                      type="text"
+                      defaultValue={z.name}
+                      placeholder="Gated community"
+                      aria-label="Gated area name"
+                      onBlur={async (e) => {
+                        const name = e.target.value.trim()
+                        if (name === z.name) return
+                        try {
+                          await store.renameZone(z.id, name)
+                          setMsg(null)
+                        } catch (err) {
+                          setMsg(`Couldn't rename it: ${(err as Error).message}`)
+                          e.target.value = z.name
+                        }
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                    />
+                    <div className="muted num" style={{ fontSize: 13, marginTop: 2 }}>{leadsIn(z) === 1 ? '1 lead' : `${leadsIn(z)} leads`}{z.source === 'osm' ? ' · from OpenStreetMap' : ''}</div>
+                  </div>
                   {confirm === z.id ? (
                     <span className="row" style={{ gap: 6 }}>
                       <button
