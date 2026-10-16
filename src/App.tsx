@@ -11,6 +11,7 @@ import { TeamPanel } from './components/TeamPanel'
 import { AgendaPanel } from './components/AgendaPanel'
 import { PeekCard } from './components/PeekCard'
 import { dueNowCount } from './lib/agenda'
+import { findGated, zoneAt, zoneLabel, type Suggestion } from './lib/gated'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
 import { STATUS, STATUS_ORDER } from './lib/dispositions'
 import { activeClaim } from './lib/leads'
@@ -87,6 +88,13 @@ function Field({ store }: { store: Store }) {
   const [peekId, setPeekId] = useState<string | null>(null)
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [drawing, setDrawing] = useState(false)
+  // Managers marking a gated area: drawing it, naming it, or reviewing OpenStreetMap suggestions.
+  const [zoneDraw, setZoneDraw] = useState(false)
+  const [pendingZone, setPendingZone] = useState<[number, number][] | null>(null)
+  const [zoneName, setZoneName] = useState('')
+  const [review, setReview] = useState<{ list: Suggestion[]; i: number; name: string } | null>(null)
+  const [findingGated, setFindingGated] = useState(false)
+  const [zoneBusy, setZoneBusy] = useState(false)
   // Dispositions hidden on the map, remembered on this phone. Empty = show everything.
   const [hiddenList, setHiddenList] = usePref<LeadStatus[]>('knockroute-hidden', [])
   const hidden = useMemo(() => new Set(hiddenList), [hiddenList])
@@ -347,9 +355,83 @@ function Field({ store }: { store: Store }) {
 
   function onLasso(poly: Point[]) {
     setDrawing(false)
+    if (zoneDraw) {
+      setZoneDraw(false)
+      setPendingZone(poly.map((p) => [+p.lat.toFixed(6), +p.lng.toFixed(6)]))
+      setZoneName('')
+      return
+    }
     const hit = mapLeads.filter((l) => l.lat != null && insidePolygon(l as Point, poly))
     setSelection(new Set(hit.map((l) => l.id)))
     if (!hit.length) flash('No pins inside that shape')
+  }
+
+  const gatedAt = (l: Lead) => (l.lat != null && l.lng != null ? zoneAt({ lat: l.lat, lng: l.lng }, snap.zones) : null)
+
+  function startZoneDraw() {
+    setOpenId(null)
+    setPeekId(null)
+    setSelection(new Set())
+    setTab('map')
+    setZoneDraw(true)
+    setDrawing(true)
+  }
+
+  async function saveZone() {
+    if (!pendingZone) return
+    setZoneBusy(true)
+    try {
+      await store.addZone({ name: zoneName.trim(), points: pendingZone })
+      setPendingZone(null)
+      flash('Gated area saved. Everyone sees it now.')
+    } catch (e) {
+      flash(`Couldn't save it: ${(e as Error).message}`)
+    } finally {
+      setZoneBusy(false)
+    }
+  }
+
+  function showSuggestion(list: Suggestion[], i: number) {
+    const s = list[i]
+    setReview({ list, i, name: s.name })
+    mapRef.current?.fit(s.points.map(([lat, lng]) => ({ lat, lng })))
+  }
+
+  async function findGatedHere() {
+    const b = mapRef.current?.bounds()
+    if (!b) return
+    setTab('map')
+    if (b[2] - b[0] > 0.3 || b[3] - b[1] > 0.3) {
+      flash('Zoom in to a few neighborhoods first, then try again.')
+      return
+    }
+    setFindingGated(true)
+    const res = await findGated(b, snap.zones)
+    setFindingGated(false)
+    if (!res.ok) flash(res.error)
+    else if (!res.suggestions.length) flash('OpenStreetMap has no new gated areas here. You can still draw one.')
+    else showSuggestion(res.suggestions, 0)
+  }
+
+  async function answerSuggestion(gated: boolean | null) {
+    if (!review) return
+    const s = review.list[review.i]
+    if (gated !== null) {
+      setZoneBusy(true)
+      try {
+        await store.addZone({ name: gated ? review.name.trim() : s.name, points: s.points, source: 'osm', osmId: s.osmId, status: gated ? 'active' : 'dismissed' })
+      } catch (e) {
+        flash(`Couldn't save it: ${(e as Error).message}`)
+        setZoneBusy(false)
+        return
+      }
+      setZoneBusy(false)
+    }
+    if (review.i + 1 < review.list.length) showSuggestion(review.list, review.i + 1)
+    else {
+      setReview(null)
+      flash('All suggestions reviewed.')
+    }
   }
 
   function openFromList(l: Lead) {
@@ -416,6 +498,9 @@ function Field({ store }: { store: Store }) {
           }
           onLasso={onLasso}
           onReady={(h) => (mapRef.current = h)}
+          zones={snap.zones}
+          suggestions={review ? [review.list[review.i]] : pendingZone ? [{ osmId: 'new', name: '', points: pendingZone, reason: '' }] : undefined}
+          activeSuggestion={review ? review.list[review.i].osmId : pendingZone ? 'new' : null}
         />
 
         {snap.error && <div className="banner" style={{ top: 60, bottom: 'auto' }}><span className="err">Can't reach team data: {snap.error}</span></div>}
@@ -429,7 +514,7 @@ function Field({ store }: { store: Store }) {
         </div>
 
         <div className="map-tools">
-          <button className="tool stack" aria-pressed={drawing} onClick={() => { setDrawing(!drawing); setOpenId(null); setPeekId(null); setTab('map') }} aria-label="Draw around leads">
+          <button className="tool stack" aria-pressed={drawing} onClick={() => { setDrawing(!drawing); setZoneDraw(false); setOpenId(null); setPeekId(null); setTab('map') }} aria-label="Draw around leads">
             <Icon name="lasso" />
             <span className="tool-label">{drawing ? 'Cancel' : 'Draw'}</span>
           </button>
@@ -441,7 +526,36 @@ function Field({ store }: { store: Store }) {
           </button>
         </div>
 
-        {drawing && <div className="draw-hint">Drag a loop around the houses</div>}
+        {drawing && <div className="draw-hint">{zoneDraw ? 'Drag a loop around the gated neighborhood' : 'Drag a loop around the houses'}</div>}
+        {findingGated && <div className="draw-hint">Checking OpenStreetMap for gated areas…</div>}
+        {pendingZone && (
+          <div className="banner">
+            <h3>Mark this as a gated area?</h3>
+            <input id="zone-name" type="text" value={zoneName} onChange={(e) => setZoneName(e.target.value)} placeholder="Name (optional), e.g. Heron Bay" />
+            <div className="row">
+              <button className="btn primary" disabled={zoneBusy} onClick={saveZone}>{zoneBusy ? 'Saving…' : 'Save gated area'}</button>
+              <button className="btn" disabled={zoneBusy} onClick={startZoneDraw}>Redraw</button>
+              <button className="btn" disabled={zoneBusy} onClick={() => setPendingZone(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {review && (
+          <div className="banner">
+            <div className="banner-row">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span className="eyebrow">Possible gated area · {review.i + 1} of {review.list.length}</span>
+                <div className="muted" style={{ fontSize: 14 }}>{review.list[review.i].reason}. Check the satellite view if unsure.</div>
+              </div>
+              <button className="close" onClick={() => setReview(null)} aria-label="Stop reviewing"><Icon name="close" /></button>
+            </div>
+            <input id="suggestion-name" type="text" value={review.name} onChange={(e) => setReview({ ...review, name: e.target.value })} placeholder="Name (optional)" />
+            <div className="row">
+              <button className="btn primary" disabled={zoneBusy} onClick={() => answerSuggestion(true)}><Icon name="check" /> Gated</button>
+              <button className="btn" disabled={zoneBusy} onClick={() => answerSuggestion(false)}>Not gated</button>
+              <button className="btn" disabled={zoneBusy} onClick={() => answerSuggestion(null)}>Skip</button>
+            </div>
+          </div>
+        )}
         {snap.ready && visible.length === 0 && tab === 'map' && !overlay && !importing && (
           <div className="banner">
             <h3>No leads on the map yet</h3>
@@ -468,7 +582,7 @@ function Field({ store }: { store: Store }) {
           </div>
         )}
 
-        {!drawing && selection.size > 0 && !overlay && (
+        {!drawing && !pendingZone && !review && selection.size > 0 && !overlay && (
           <div className="banner">
             <div className="banner-row">
               <h3 className="num" style={{ flex: 1 }}>
@@ -506,7 +620,7 @@ function Field({ store }: { store: Store }) {
           </div>
         )}
 
-        {!drawing && !placingId && selection.size === 0 && !overlay && tab === 'map' && visible.length > 0 && (
+        {!drawing && !placingId && !pendingZone && !review && selection.size === 0 && !overlay && tab === 'map' && visible.length > 0 && (
           <div className="legend" role="group" aria-label="Show or hide pins by disposition">
             <span className="legend-hint">Tap to show/hide</span>
             {STATUS_ORDER.map((s) => (
@@ -566,7 +680,8 @@ function Field({ store }: { store: Store }) {
             onReoptimize={reoptimize}
             onEnd={endRoute}
             onNearest={nearest}
-            onDraw={() => { setTab('map'); setDrawing(true) }}
+            onDraw={() => { setTab('map'); setZoneDraw(false); setDrawing(true) }}
+            gatedAt={(l) => { const z = gatedAt(l); return z ? zoneLabel(z) : null }}
           />
         )}
         {!overlay && tab === 'leads' && <LeadsPanel snap={snap} leads={visible} me={here} onClose={() => setTab('map')} onOpenLead={openFromList} />}
@@ -582,7 +697,16 @@ function Field({ store }: { store: Store }) {
           />
         )}
         {!overlay && tab === 'team' && !importing && (
-          <TeamPanel store={store} snap={snap} onClose={() => setTab('map')} onOpenLead={openFromList} onImport={() => setImporting(true)} />
+          <TeamPanel
+            store={store}
+            snap={snap}
+            onClose={() => setTab('map')}
+            onOpenLead={openFromList}
+            onImport={() => setImporting(true)}
+            onDrawZone={startZoneDraw}
+            onFindGated={findGatedHere}
+            onShowZone={(z) => { setTab('map'); mapRef.current?.fit(z.points.map(([lat, lng]) => ({ lat, lng }))) }}
+          />
         )}
         {importing && (
           <ImportWizard
@@ -603,7 +727,7 @@ function Field({ store }: { store: Store }) {
             key={t.key}
             className="tab"
             aria-current={tab === t.key && !overlay ? 'page' : undefined}
-            onClick={() => { setOpenId(null); setPeekId(null); setDrawing(false); setImporting(false); setTab(tab === t.key && t.key !== 'map' ? 'map' : t.key) }}
+            onClick={() => { setOpenId(null); setPeekId(null); setDrawing(false); setZoneDraw(false); setImporting(false); setTab(tab === t.key && t.key !== 'map' ? 'map' : t.key) }}
           >
             <Icon name={t.icon} />
             {t.label}

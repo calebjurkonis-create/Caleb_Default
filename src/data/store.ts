@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Activity, Lead, LeadList, Member, NewLead, Outcome, Role } from '../types'
+import type { Activity, GatedZone, Lead, LeadList, Member, NewLead, NewZone, Outcome, Role } from '../types'
 
 export interface LeadFix {
   id: string
@@ -26,6 +26,10 @@ export interface Snapshot {
   agendaReady: boolean
   /** Dates on follow-ups/appointments can be set or changed afterwards (the newer 004 applied). */
   canSetDates?: boolean
+  /** Gated areas (and dismissed suggestions). Empty until database update 005. */
+  zones: GatedZone[]
+  /** Gated areas can be saved (database update 005 applied). */
+  zonesReady: boolean
   /** Bumped when a follow-up/appointment is updated, so open agenda lists refresh. */
   itemsVersion?: number
 }
@@ -54,6 +58,10 @@ export interface Store {
    * update as its own entry, so the lead's status and history move forward.
    */
   resolveItem(itemId: string, result: Outcome, notes: string, nextDueAt?: string | null): Promise<void>
+  /** Managers: mark a gated area, or record a dismissed suggestion (status 'dismissed'). */
+  addZone(zone: NewZone): Promise<void>
+  /** Managers: remove a gated area. */
+  deleteZone(id: string): Promise<void>
   /** Sets or changes the date on an open follow-up/appointment (its agent or a manager). */
   setDue(itemId: string, dueAt: string): Promise<void>
   /** Every disposition the viewer can see between two times, newest first (for reports). */

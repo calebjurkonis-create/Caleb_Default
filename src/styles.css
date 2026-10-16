@@ -373,3 +373,13 @@ input[type='datetime-local'] {
 .agenda-item .lead-link { border: 0; background: none; padding: 0; text-align: left; font-weight: 600; font-size: 16px; text-decoration: underline; text-underline-offset: 2px; }
 .bucket-head { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
 .agenda-item.undated .when { color: var(--muted); }
+/* Gated areas */
+:root { --gated: #33415c; }
+@media (prefers-color-scheme: dark) { :root { --gated: #c7d2e3; } }
+.zone-label { pointer-events: none; }
+.zone-label span {
+  position: absolute; transform: translate(-50%, -115%); white-space: nowrap;
+  font-family: var(--f-display); font-weight: 700; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--gated); background: var(--surface); border: 1.5px dashed var(--gated); border-radius: 6px; padding: 1px 6px; opacity: 0.92;
+}
+.tag.gated { border-style: dashed; border-color: var(--gated); }

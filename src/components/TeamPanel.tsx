@@ -3,10 +3,12 @@ import { activityLeadName, memberName, type Snapshot, type Store } from '../data
 import { STATUS } from '../lib/dispositions'
 import { activeClaim, clockTime, isToday, shortName, timeAgo } from '../lib/leads'
 import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, ratioLabel, saveFile, type AgentRow, type Period } from '../lib/reports'
-import type { Activity, Lead } from '../types'
+import type { Activity, GatedZone, Lead } from '../types'
 import { Icon } from './Icon'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 import { buildBackup, lastBackupAt, markBackedUp } from '../lib/backup'
+import { zoneLabel } from '../lib/gated'
+import { insidePolygon } from '../lib/route'
 
 interface Props {
   store: Store
@@ -14,6 +16,9 @@ interface Props {
   onClose(): void
   onOpenLead(l: Lead): void
   onImport(): void
+  onDrawZone(): void
+  onFindGated(): void
+  onShowZone(z: GatedZone): void
 }
 
 type SortKey = 'appts' | 'doors' | 'followUps' | 'notInterested' | 'sold' | 'ratio'
@@ -27,7 +32,7 @@ const COLUMNS: { key: SortKey; label: string; title: string }[] = [
   { key: 'ratio', label: '+/−', title: 'Appointments + follow-ups against not interested' },
 ]
 
-export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props) {
+export function TeamPanel({ store, snap, onClose, onOpenLead, onImport, onDrawZone, onFindGated, onShowZone }: Props) {
   const isManager = snap.me?.role === 'manager'
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>('month')
@@ -282,6 +287,8 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport }: Props)
           </div>
         )}
 
+        {isManager && <GatedAreas store={store} snap={snap} onDraw={onDrawZone} onFind={onFindGated} onShow={onShowZone} />}
+
         {isManager && <DoorsOnRoutes store={store} snap={snap} />}
 
         {isManager && <RemoveByMonth store={store} snap={snap} />}
@@ -517,6 +524,75 @@ function Backup({ store, snap }: { store: Store; snap: Snapshot }) {
         <div className="muted" style={{ fontSize: 13 }}>Last backup from this phone: {days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`}.</div>
       )}
       {msg && <div className="muted" style={{ fontSize: 14 }}>{msg}</div>}
+    </div>
+  )
+}
+
+/** Managers: mark gated communities (drawn, or confirmed from OpenStreetMap). Everyone sees them. */
+function GatedAreas({ store, snap, onDraw, onFind, onShow }: { store: Store; snap: Snapshot; onDraw(): void; onFind(): void; onShow(z: GatedZone): void }) {
+  const [confirm, setConfirm] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const zones = snap.zones.filter((z) => z.status === 'active')
+  const leadsIn = (z: GatedZone) => {
+    const poly = z.points.map(([lat, lng]) => ({ lat, lng }))
+    return snap.leads.filter((l) => l.lat != null && l.lng != null && insidePolygon({ lat: l.lat, lng: l.lng }, poly)).length
+  }
+
+  return (
+    <div className="section">
+      <h3 style={{ fontSize: 20 }}>Gated areas</h3>
+      {!snap.zonesReady ? (
+        <div className="notice">Turns on after the one-time database update (005).</div>
+      ) : (
+        <>
+          <div className="muted" style={{ fontSize: 14 }}>
+            Outlined on everyone's map. Leads inside stay routable; agents just get a heads-up.
+          </div>
+          <div className="row">
+            <button className="btn small" onClick={onDraw}><Icon name="lasso" /> Draw a gated area</button>
+            <button className="btn small" onClick={onFind}><Icon name="search" /> Find on the map view</button>
+          </div>
+          <div className="muted" style={{ fontSize: 13 }}>
+            “Find” checks OpenStreetMap (the map data behind road routing) for gated or private neighborhoods in the part of the map on screen. You confirm each one before anyone sees it.
+          </div>
+          {zones.length > 0 && (
+            <ul className="list">
+              {zones.map((z) => (
+                <li key={z.id} className="switch" style={{ flexWrap: 'wrap' }}>
+                  <span style={{ minWidth: 0 }}>
+                    <b>{zoneLabel(z)}</b>{' '}
+                    <span className="muted num">· {leadsIn(z)} leads{z.source === 'osm' ? ' · from OpenStreetMap' : ''}</span>
+                  </span>
+                  {confirm === z.id ? (
+                    <span className="row" style={{ gap: 6 }}>
+                      <button
+                        className="btn small danger"
+                        onClick={async () => {
+                          setConfirm(null)
+                          try {
+                            await store.deleteZone(z.id)
+                          } catch (e) {
+                            setMsg(`Couldn't remove it: ${(e as Error).message}`)
+                          }
+                        }}
+                      >
+                        Remove
+                      </button>
+                      <button className="btn small" onClick={() => setConfirm(null)}>Keep</button>
+                    </span>
+                  ) : (
+                    <span className="row" style={{ gap: 6 }}>
+                      <button className="btn small" onClick={() => onShow(z)}>Show</button>
+                      <button className="btn small" onClick={() => setConfirm(z.id)}>Remove…</button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {msg && <div className="err">{msg}</div>}
+        </>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
 import { HistoryList } from './LeadSheet'
+import { zoneAt, zoneLabel } from '../lib/gated'
 
 interface Props {
   store: Store
@@ -33,6 +34,7 @@ export function PeekCard({ store, snap, lead, onRoute, navApp, onClose, onOpen, 
   const age = turning65(lead.dob)
   const claim = activeClaim(lead)
   const hasPoint = lead.lat != null && lead.lng != null
+  const zone = hasPoint ? zoneAt({ lat: lead.lat!, lng: lead.lng! }, snap.zones) : null
 
   return (
     <section className="sheet peek" aria-label={`Quick look: ${fullName(lead)}`}>
@@ -55,6 +57,7 @@ export function PeekCard({ store, snap, lead, onRoute, navApp, onClose, onOpen, 
           {lead.lastActivityAt && <span className="tag">{memberName(snap, lead.lastActivityBy)} · {timeAgo(lead.lastActivityAt)}</span>}
           {age && <span className={`tag${age.monthsAway <= 2 ? ' warn' : ''}`}>{age.label}</span>}
           {claim && <span className="tag warn">{claim === snap.me?.id ? 'On your route' : `On ${memberName(snap, claim)}'s route`}</span>}
+          {zone && <span className="tag gated">Gated · {zoneLabel(zone)}</span>}
           {hasPoint && lead.pinApprox && <span className="tag warn">Street pin · house #{houseNumberOf(lead) || '?'}</span>}
         </div>
         <div>

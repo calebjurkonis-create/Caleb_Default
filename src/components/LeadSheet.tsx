@@ -8,6 +8,7 @@ import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead, Outcome } from '../types'
 import { Icon } from './Icon'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
+import { zoneAt, zoneLabel } from '../lib/gated'
 
 interface Props {
   store: Store
@@ -52,6 +53,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
   const claim = activeClaim(lead)
   const isManager = snap.me?.role === 'manager'
   const hasPoint = lead.lat != null && lead.lng != null
+  const zone = hasPoint ? zoneAt({ lat: lead.lat!, lng: lead.lng! }, snap.zones) : null
 
   // Every disposition needs a note except No Answer/Not Home.
   const noteRequired = outcome !== 'no_answer'
@@ -154,6 +156,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
               {releasing ? 'Releasing…' : 'Release'}
             </button>
           )}
+          {zone && <span className="tag gated">Inside a gated community · {zoneLabel(zone)}</span>}
           {lead.attempts > 0 && <span className="tag">{lead.attempts} attempt{lead.attempts === 1 ? '' : 's'}</span>}
           {!hasPoint && <span className="tag warn">Address not found on map</span>}
           {hasPoint && lead.pinApprox && (

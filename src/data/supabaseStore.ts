@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Activity, Lead, LeadList, LeadStatus, Member, Role } from '../types'
+import type { Activity, GatedZone, Lead, LeadList, LeadStatus, Member, Role } from '../types'
 import type { Snapshot, Store } from './store'
 import { DATED } from '../lib/dispositions'
 import { currentItems } from '../lib/agenda'
@@ -31,6 +31,16 @@ const toLead = (r: Row): Lead => ({
   claimedAt: r.claimed_at,
 })
 
+const toZone = (r: Row): GatedZone => ({
+  id: r.id,
+  name: r.name ?? '',
+  points: Array.isArray(r.points) ? r.points : [],
+  source: r.source === 'osm' ? 'osm' : 'drawn',
+  osmId: r.osm_id ?? null,
+  status: r.status === 'dismissed' ? 'dismissed' : 'active',
+  createdBy: r.created_by ?? null,
+  createdAt: r.created_at,
+})
 const toActivity = (r: Row): Activity => ({
   id: r.id,
   leadId: r.lead_id ?? '',
@@ -67,7 +77,7 @@ async function selectAll(sb: SupabaseClient, table: string, build?: (q: any) => 
 export function createSupabaseStore(url: string, anonKey: string): Store {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } })
   const listeners = new Set<() => void>()
-  let snapshot: Snapshot = { ready: false, me: null, members: [], leads: [], activities: [], lists: [], error: null, agendaReady: false }
+  let snapshot: Snapshot = { ready: false, me: null, members: [], leads: [], activities: [], lists: [], error: null, agendaReady: false, zones: [], zonesReady: false }
   let leads = new Map<string, Lead>()
   let channel: ReturnType<SupabaseClient['channel']> | null = null
   let userId: string | null = null
@@ -89,16 +99,26 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
   }
   const fail = (err: unknown) => emit({ ready: true, error: (err as Error)?.message ?? String(err) })
 
+  // Gated areas (update 005). Before that update the table doesn't exist: no areas.
+  async function loadZones(): Promise<GatedZone[]> {
+    try {
+      return (await selectAll(sb, 'gated_zones', (q) => q.order('created_at', { ascending: true }))).map(toZone)
+    } catch {
+      return []
+    }
+  }
+
   async function loadAll() {
     if (!userId) return
     try {
       const since = new Date(Date.now() - RECENT_DAYS * 86400_000).toISOString()
-      const [members, leadRows, acts, lists, version] = await Promise.all([
+      const [members, leadRows, acts, lists, version, zones] = await Promise.all([
         selectAll(sb, 'profiles'),
         selectAll(sb, 'leads'),
         selectAll(sb, 'activities', (q) => q.gte('created_at', since).order('created_at', { ascending: false })),
         selectAll(sb, 'lead_lists', (q) => q.order('created_at', { ascending: false })),
         sb.rpc('knockroute_version').then((r) => (r.error ? 0 : Number(r.data))),
+        loadZones(),
       ])
       leads = new Map(leadRows.map((r) => [r.id, toLead(r)]))
       const memberList = members.map(toMember)
@@ -112,6 +132,8 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         lists: lists.map(toList),
         agendaReady: version >= 4,
         canSetDates: version >= 5,
+        zonesReady: version >= 6,
+        zones,
       })
     } catch (err) {
       fail(err)
@@ -144,6 +166,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         emit({ activities: has ? snapshot.activities.map((x) => (x.id === a.id ? a : x)) : [a, ...snapshot.activities], itemsVersion: (snapshot.itemsVersion ?? 0) + 1 })
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gated_zones' }, async () => emit({ zones: await loadZones() }))
       .subscribe()
   }
 
@@ -154,7 +177,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       channel?.unsubscribe()
       channel = null
       leads = new Map()
-      emit({ ready: true, me: null, members: [], leads: [], activities: [], lists: [] })
+      emit({ ready: true, me: null, members: [], leads: [], activities: [], lists: [], zones: [] })
       return
     }
     await loadAll()
@@ -237,6 +260,18 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         return snapshot.agendaReady ? base.is('resolved_at', null) : base
       })
       return currentItems(rows.map(toActivity), leads)
+    },
+    async addZone(z) {
+      check(
+        await sb.from('gated_zones').insert({
+          name: z.name, points: z.points, source: z.source ?? 'drawn', osm_id: z.osmId ?? null, status: z.status ?? 'active',
+        }),
+      )
+      emit({ zones: await loadZones() })
+    },
+    async deleteZone(id) {
+      check(await sb.from('gated_zones').delete().eq('id', id))
+      emit({ zones: snapshot.zones.filter((z) => z.id !== id) })
     },
     async setDue(itemId, dueAt) {
       check(await sb.rpc('set_due', { item: itemId, due: dueAt }))

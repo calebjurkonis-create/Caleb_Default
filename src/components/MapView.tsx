@@ -2,13 +2,16 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import { statusColor } from '../lib/dispositions'
+import type { Suggestion } from '../lib/gated'
 import type { Point } from '../lib/route'
-import type { Lead } from '../types'
+import type { GatedZone, Lead } from '../types'
 
 export interface MapHandle {
   flyTo(p: Point, zoom?: number): void
   fit(points: Point[]): void
   center(): Point
+  /** [south, west, north, east] of what's on screen. */
+  bounds(): [number, number, number, number]
 }
 
 interface Props {
@@ -30,6 +33,11 @@ interface Props {
   /** When set, a tap anywhere on the map reports where (used to place a lead's pin). */
   onMapTap?: (p: Point) => void
   onReady(h: MapHandle): void
+  /** Gated areas everyone sees (outlined, under the pins). */
+  zones: GatedZone[]
+  /** OpenStreetMap suggestions a manager is reviewing; the active one is highlighted. */
+  suggestions?: Suggestion[]
+  activeSuggestion?: string | null
 }
 
 const TILES = {
@@ -51,6 +59,8 @@ export function MapView(props: Props) {
   const tiles = useRef<L.TileLayer | null>(null)
   const pins = useRef<L.LayerGroup | null>(null)
   const routeLayer = useRef<L.LayerGroup | null>(null)
+  const zoneLayer = useRef<L.LayerGroup | null>(null)
+  const zoneRenderer = useRef<L.SVG | null>(null)
   const meLayer = useRef<L.Marker | null>(null)
   const onTap = useRef(props.onTap)
   onTap.current = props.onTap
@@ -66,6 +76,10 @@ export function MapView(props: Props) {
   useEffect(() => {
     if (!el.current || map.current) return
     const m = L.map(el.current, { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([28.42, -81.5], 10)
+    // Gated areas sit in their own layer under the pins and never catch taps.
+    m.createPane('zones').style.zIndex = '350'
+    zoneRenderer.current = L.svg({ pane: 'zones' })
+    zoneLayer.current = L.layerGroup().addTo(m)
     pins.current = L.layerGroup().addTo(m)
     routeLayer.current = L.layerGroup().addTo(m)
     m.on('moveend', () => setView((v) => v + 1))
@@ -80,6 +94,10 @@ export function MapView(props: Props) {
       center: () => {
         const c = m.getCenter()
         return { lat: c.lat, lng: c.lng }
+      },
+      bounds: () => {
+        const b = m.getBounds()
+        return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
       },
     })
     return () => {
@@ -157,6 +175,40 @@ export function MapView(props: Props) {
       }
     }
   }, [props.leads, props.selected, props.focusId, props.claimedByOthers, props.themeKey, view])
+
+  // Gated areas, plus any suggestions being reviewed. Names show once zoomed in.
+  useEffect(() => {
+    const group = zoneLayer.current
+    const m = map.current
+    if (!group || !m || !zoneRenderer.current) return
+    group.clearLayers()
+    const css = getComputedStyle(document.documentElement)
+    const ink = css.getPropertyValue('--gated').trim() || '#33415c'
+    const routeColor = css.getPropertyValue('--route').trim() || '#f2b632'
+    const named = m.getZoom() >= 14
+    for (const z of props.zones) {
+      if (z.status !== 'active' || z.points.length < 3) continue
+      L.polygon(z.points, {
+        renderer: zoneRenderer.current, pane: 'zones', interactive: false,
+        color: ink, weight: 2, dashArray: '7 5', fillColor: ink, fillOpacity: 0.1,
+      }).addTo(group)
+      if (named) {
+        // Along the top edge, so it doesn't sit on the houses in the middle.
+        const bb = L.polygon(z.points).getBounds()
+        L.marker([bb.getNorth(), bb.getCenter().lng], {
+          pane: 'zones', interactive: false, keyboard: false,
+          icon: L.divIcon({ className: 'zone-label', html: `<span>Gated${z.name ? ' · ' + escapeHtml(z.name) : ''}</span>`, iconSize: [0, 0] }),
+        }).addTo(group)
+      }
+    }
+    for (const s of props.suggestions ?? []) {
+      const on = s.osmId === props.activeSuggestion
+      L.polygon(s.points, {
+        renderer: zoneRenderer.current, pane: 'zones', interactive: false,
+        color: routeColor, weight: on ? 4 : 2, dashArray: on ? undefined : '4 6', fillColor: routeColor, fillOpacity: on ? 0.25 : 0.08,
+      }).addTo(group)
+    }
+  }, [props.zones, props.suggestions, props.activeSuggestion, props.themeKey, view])
 
   // Route line + numbered stops.
   useEffect(() => {
@@ -265,4 +317,8 @@ function Lasso({ map, onDone }: { map: L.Map; onDone(poly: Point[]): void }) {
       </svg>
     </div>
   )
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }

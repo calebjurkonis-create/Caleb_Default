@@ -81,3 +81,20 @@ export type NewLead = Omit<
   Lead,
   'id' | 'listId' | 'status' | 'attempts' | 'lastActivityAt' | 'lastActivityBy' | 'claimedBy' | 'claimedAt'
 >
+
+/** A gated community marked on the map. Leads inside stay routable; it's a heads-up only. */
+export interface GatedZone {
+  id: string
+  name: string
+  /** [lat, lng] around the area. */
+  points: [number, number][]
+  /** Drawn by a manager, or confirmed from an OpenStreetMap suggestion. */
+  source: 'drawn' | 'osm'
+  osmId: string | null
+  /** 'dismissed' = a suggestion a manager said isn't gated; never shown, only kept so it isn't suggested again. */
+  status: 'active' | 'dismissed'
+  createdBy: string | null
+  createdAt: string
+}
+
+export type NewZone = Pick<GatedZone, 'name' | 'points'> & Partial<Pick<GatedZone, 'source' | 'osmId' | 'status'>>

@@ -48,6 +48,7 @@ Run each file in [`supabase/updates/`](supabase/updates/) once, in order, in the
 - `001-keep-history-and-street-pins.sql`: street-level pins; removing leads keeps their door-knock history.
 - `003-app-settings.sql`: shared settings, used for the road-routing key.
 - `004-agenda.sql`: dates on appointments and follow-ups, the Agenda tab, and status updates (Sold, Booked…). Also includes 001.
+- `005-gated-areas.sql`: gated areas managers mark on the map.
 
 #### Adding and removing people later
 - **Add:** Authentication → Users → Add user → Create new user (step 4), then set their name and role in the app's Team tab.

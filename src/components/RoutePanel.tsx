@@ -22,6 +22,8 @@ interface Props {
   onEnd(): void
   onNearest(n: number): void
   onDraw(): void
+  /** Name of the gated area a stop is in, if any (a heads-up; the stop stays on the route). */
+  gatedAt(l: Lead): string | null
 }
 
 export function RoutePanel(p: Props) {
@@ -31,6 +33,7 @@ export function RoutePanel(p: Props) {
   const start = p.me ?? (p.stops[0] ? { lat: p.stops[0].lat!, lng: p.stops[0].lng! } : null)
   const est = start ? routeEstimate(start, remaining as Point[]) : null
   const legs = googleRouteLegs(p.me, remaining as Point[])
+  const gatedLeft = remaining.filter((s) => p.gatedAt(s)).length
 
   return (
     <section className="sheet" aria-label="Today's route">
@@ -94,6 +97,7 @@ export function RoutePanel(p: Props) {
                   <div className="muted">{cityLine(next)}</div>
                 </div>
                 {next.pinApprox && <div className="tag warn" style={{ alignSelf: 'flex-start' }}>Pin is on the street · look for house #{houseNumberOf(next) || '?'}</div>}
+                {p.gatedAt(next) && <div className="tag gated" style={{ alignSelf: 'flex-start' }}>Inside a gated community · {p.gatedAt(next)}</div>}
                 <div className="row">
                   <a className="btn primary" href={navUrl(p.navApp, navTarget(next))} target="_blank" rel="noreferrer">
                     <Icon name="nav" /> Navigate
@@ -121,6 +125,12 @@ export function RoutePanel(p: Props) {
               </button>
             </div>
 
+            {gatedLeft > 0 && (
+              <div className="notice">
+                Heads-up: {gatedLeft === 1 ? '1 stop is' : `${gatedLeft} stops are`} inside a gated community. {gatedLeft === 1 ? 'It stays' : 'They stay'} on the route; plan how you'll get in.
+              </div>
+            )}
+
             <ol className="list">
               {p.stops.map((s, i) => {
                 const isDone = p.done.has(s.id)
@@ -130,7 +140,7 @@ export function RoutePanel(p: Props) {
                     <div style={{ minWidth: 0 }}>
                       <button className="lead-row" style={{ padding: 0, display: 'block' }} onClick={() => p.onOpenLead(s)}>
                         <div className="name">{shortName(s)}</div>
-                        <div className="sub">{s.address}, {s.city}{s.pinApprox ? ' · street pin' : ''}</div>
+                        <div className="sub">{s.address}, {s.city}{s.pinApprox ? ' · street pin' : ''}{p.gatedAt(s) ? ' · gated' : ''}</div>
                       </button>
                       <div className="actions">
                         <span className="status">

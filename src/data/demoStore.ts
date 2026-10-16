@@ -1,4 +1,4 @@
-import type { Activity, Lead, LeadList, Member, Role } from '../types'
+import type { Activity, GatedZone, Lead, LeadList, Member, Role } from '../types'
 import { DATED, STATUS } from '../lib/dispositions'
 import { currentItems } from '../lib/agenda'
 import { activeClaim } from '../lib/leads'
@@ -14,6 +14,7 @@ interface Saved {
   leads: Lead[]
   activities: Activity[]
   lists: LeadList[]
+  zones?: GatedZone[]
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -64,6 +65,8 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       activities: data.activities,
       lists: data.lists,
       error: null,
+      zones: data.zones ?? [],
+      zonesReady: true,
       agendaReady: true,
       canSetDates: true,
       itemsVersion,
@@ -175,6 +178,21 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
     },
     async openItems() {
       return currentItems(data.activities, new Map(data.leads.map((l) => [l.id, l])))
+    },
+    async addZone(z) {
+      if (data.role !== 'manager') throw new Error('Only managers can mark gated areas.')
+      if (z.osmId && (data.zones ?? []).some((x) => x.osmId === z.osmId)) return
+      const zone: GatedZone = {
+        id: uid(), name: z.name, points: z.points, source: z.source ?? 'drawn', osmId: z.osmId ?? null,
+        status: z.status ?? 'active', createdBy: data.meId, createdAt: new Date().toISOString(),
+      }
+      data.zones = [...(data.zones ?? []), zone]
+      commit()
+    },
+    async deleteZone(id) {
+      if (data.role !== 'manager') throw new Error('Only managers can remove gated areas.')
+      data.zones = (data.zones ?? []).filter((z) => z.id !== id)
+      commit()
     },
     async setDue(itemId, dueAt) {
       const item = data.activities.find((a) => a.id === itemId)
