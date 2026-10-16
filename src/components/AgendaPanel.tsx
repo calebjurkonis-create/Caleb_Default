@@ -5,7 +5,7 @@ import { BUCKETS, bucketOf, dueLabel } from '../lib/agenda'
 import { cityLine, fullName } from '../lib/leads'
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
-import { ItemUpdate } from './ItemUpdate'
+import { DueEdit, ItemUpdate } from './ItemUpdate'
 
 interface Props {
   store: Store
@@ -52,12 +52,13 @@ export function AgendaPanel({ store, snap, items, error, onClose, onOpenLead, on
         </button>
       </header>
       <div className="sheet-body" style={{ gap: 12 }}>
-        {!snap.agendaReady ? (
+        {!snap.canSetDates && (
           <div className="notice">
-            Dates for appointments and follow-ups turn on after a one-time database update (004). Everything else works as usual until then.
+            {isManager
+              ? 'Setting dates and updating statuses turns on after the one-time database update (004). Until then, everything shows as Undated.'
+              : 'Setting dates and updating statuses turns on soon (your manager is running a quick update).'}
           </div>
-        ) : (
-          <>
+        )}
             <div className="seg" style={{ gridTemplateColumns: '1fr 1fr 1fr' }} role="group" aria-label="Type">
               <button aria-pressed={kind === 'all'} onClick={() => setKind('all')}>All</button>
               <button aria-pressed={kind === 'appointment'} onClick={() => setKind('appointment')}>Appts</button>
@@ -82,7 +83,7 @@ export function AgendaPanel({ store, snap, items, error, onClose, onOpenLead, on
             ) : groups.length === 0 ? (
               <div className="empty">
                 <h3>Nothing open</h3>
-                <div>When you log an Appointment or Follow-Up, pick its date and it shows up here until you update it.</div>
+                <div>Appointments and follow-ups show up here until they're updated to Sold, Booked or Not Interested.</div>
               </div>
             ) : (
               groups.map((g) => (
@@ -91,13 +92,16 @@ export function AgendaPanel({ store, snap, items, error, onClose, onOpenLead, on
                     <h3 style={{ fontSize: 20 }}>{g.label}</h3>
                     <span className="muted num">{g.items.length}</span>
                   </div>
+                  {g.key === 'undated' && snap.canSetDates && (
+                    <div className="muted" style={{ fontSize: 14 }}>Logged without a date. Tap Set date so they land on the right day.</div>
+                  )}
                   <ul className="list">
                     {g.items.map((i) => {
                       const lead = leadById.get(i.leadId)!
                       return (
-                        <li key={i.id} className={`agenda-item${g.key === 'overdue' ? ' overdue' : ''}`}>
+                        <li key={i.id} className={`agenda-item${g.key === 'overdue' ? ' overdue' : ''}${g.key === 'undated' ? ' undated' : ''}`}>
                           <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
-                            <span className="when">{dueLabel(i.dueAt!)}</span>
+                            <span className="when">{i.dueAt ? dueLabel(i.dueAt) : 'No date yet'}</span>
                             <span className="status">
                               <span className="dot" style={{ background: STATUS[i.outcome].color }} />
                               {i.outcome === 'appointment' ? 'Appointment' : 'Follow-up'}
@@ -114,9 +118,12 @@ export function AgendaPanel({ store, snap, items, error, onClose, onOpenLead, on
                           {openItem === i.id ? (
                             <ItemUpdate store={store} item={i} onDone={(m) => { setOpenItem(null); onUpdated(m) }} />
                           ) : (
-                            <div className="row">
-                              <button className="btn small" onClick={() => setOpenItem(i.id)}>Update status</button>
-                            </div>
+                            (snap.agendaReady || snap.canSetDates) && (
+                              <div className="row">
+                                {snap.canSetDates && <DueEdit store={store} item={i} onDone={onUpdated} />}
+                                {snap.agendaReady && <button className="btn small" onClick={() => setOpenItem(i.id)}>Update status</button>}
+                              </div>
+                            )
                           )}
                         </li>
                       )
@@ -125,8 +132,6 @@ export function AgendaPanel({ store, snap, items, error, onClose, onOpenLead, on
                 </div>
               ))
             )}
-          </>
-        )}
       </div>
     </section>
   )

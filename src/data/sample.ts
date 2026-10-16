@@ -105,9 +105,10 @@ export function buildSample(now = new Date()): { leads: Lead[]; activities: Acti
             outcome,
             notes: sampleNote(outcome, r),
             createdAt: at.toISOString(),
-            // Follow-ups/appointments get a due date from a day back to five days out.
+            // Follow-ups/appointments get a due date from a day back to five days out
+            // (about one in five has none, like the ones logged before dates existed).
             dueAt:
-              outcome === 'follow_up' || outcome === 'appointment'
+              (outcome === 'follow_up' || outcome === 'appointment') && r() > 0.2
                 ? new Date(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10 + Math.floor(r() * 8)).getTime() + Math.floor(r() * 7 - 1) * 86400_000).toISOString()
                 : null,
             resolvedAt: null,
@@ -122,7 +123,7 @@ export function buildSample(now = new Date()): { leads: Lead[]; activities: Acti
   // Only the latest dated item per lead stays open.
   const latest = new Map<string, Activity>()
   for (const a of activities) latest.set(a.leadId, a)
-  for (const a of activities) if (a.dueAt && latest.get(a.leadId) !== a) { a.resolvedAt = latest.get(a.leadId)!.createdAt; a.resolution = latest.get(a.leadId)!.outcome }
+  for (const a of activities) if ((a.outcome === 'follow_up' || a.outcome === 'appointment') && latest.get(a.leadId) !== a) { a.resolvedAt = latest.get(a.leadId)!.createdAt; a.resolution = latest.get(a.leadId)!.outcome }
   for (const a of activities) {
     const l = leads.find((x) => x.id === a.leadId)!
     l.status = a.outcome

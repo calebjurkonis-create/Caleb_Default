@@ -1,4 +1,5 @@
-import type { Activity } from '../types'
+import type { Activity, Lead } from '../types'
+import { DATED } from './dispositions'
 
 /** "Today 5:00 PM", "Tomorrow 10:30 AM", "Thu, Oct 22 · 9:00 AM". */
 export function dueLabel(iso: string, now = new Date()): string {
@@ -12,9 +13,10 @@ export function dueLabel(iso: string, now = new Date()): string {
   return `${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`
 }
 
-export type Bucket = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later'
+export type Bucket = 'undated' | 'overdue' | 'today' | 'tomorrow' | 'week' | 'later'
 
 export const BUCKETS: { key: Bucket; label: string }[] = [
+  { key: 'undated', label: 'Undated' },
   { key: 'overdue', label: 'Overdue' },
   { key: 'today', label: 'Today' },
   { key: 'tomorrow', label: 'Tomorrow' },
@@ -22,7 +24,8 @@ export const BUCKETS: { key: Bucket; label: string }[] = [
   { key: 'later', label: 'Later' },
 ]
 
-export function bucketOf(iso: string, now = new Date()): Bucket {
+export function bucketOf(iso: string | null, now = new Date()): Bucket {
+  if (!iso) return 'undated'
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const t = new Date(iso).getTime()
   if (t < start) return 'overdue'
@@ -35,6 +38,22 @@ export function bucketOf(iso: string, now = new Date()): Bucket {
 /** Items due today or earlier: the count shown on the Agenda tab. */
 export function dueNowCount(items: Activity[], now = new Date()): number {
   return items.filter((i) => i.dueAt && ['overdue', 'today'].includes(bucketOf(i.dueAt, now))).length
+}
+
+/**
+ * Each lead's current open follow-up or appointment: its newest one, not yet updated, and
+ * only while the lead is still at that status. Covers ones logged before dates existed.
+ */
+export function currentItems(acts: Activity[], leads: Map<string, Lead>): Activity[] {
+  const newest = new Map<string, Activity>()
+  for (const a of acts) {
+    if (!DATED.includes(a.outcome) || a.resolvedAt || !a.leadId) continue
+    const seen = newest.get(a.leadId)
+    if (!seen || a.createdAt > seen.createdAt) newest.set(a.leadId, a)
+  }
+  return [...newest.values()]
+    .filter((a) => leads.get(a.leadId)?.status === a.outcome)
+    .sort((a, b) => (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999'))
 }
 
 /** Value for <input type="datetime-local"> from an ISO time, in the phone's time zone. */

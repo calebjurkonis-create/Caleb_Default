@@ -1,6 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Activity, Lead, LeadList, LeadStatus, Member, Role } from '../types'
 import type { Snapshot, Store } from './store'
+import { DATED } from '../lib/dispositions'
+import { currentItems } from '../lib/agenda'
 
 type Row = Record<string, any>
 
@@ -109,6 +111,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         activities: acts.map(toActivity),
         lists: lists.map(toList),
         agendaReady: version >= 4,
+        canSetDates: version >= 5,
       })
     } catch (err) {
       fail(err)
@@ -227,11 +230,21 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       emit({ activities: [a, ...snapshot.activities.filter((x) => x.id !== a.id)], leads: [...leads.values()] })
     },
     async openItems() {
-      if (!snapshot.agendaReady) return []
-      const rows = await selectAll(sb, 'activities', (q) =>
-        q.not('due_at', 'is', null).is('resolved_at', null).not('lead_id', 'is', null).order('due_at', { ascending: true }),
-      )
-      return rows.map(toActivity)
+      // Before update 004 there are no dates or updates yet, but follow-ups and appointments
+      // already logged still show (as undated).
+      const rows = await selectAll(sb, 'activities', (q) => {
+        const base = q.in('outcome', DATED).not('lead_id', 'is', null)
+        return snapshot.agendaReady ? base.is('resolved_at', null) : base
+      })
+      return currentItems(rows.map(toActivity), leads)
+    },
+    async setDue(itemId, dueAt) {
+      check(await sb.rpc('set_due', { item: itemId, due: dueAt }))
+      const has = snapshot.activities.some((a) => a.id === itemId)
+      emit({
+        activities: has ? snapshot.activities.map((a) => (a.id === itemId ? { ...a, dueAt } : a)) : snapshot.activities,
+        itemsVersion: (snapshot.itemsVersion ?? 0) + 1,
+      })
     },
     async resolveItem(itemId, result, notes, nextDueAt) {
       check(await sb.rpc('resolve_item', { item: itemId, result, note: notes, next_due: nextDueAt ?? null }))

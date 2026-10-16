@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { Store } from '../data/store'
 import { RESOLUTIONS, STATUS } from '../lib/dispositions'
-import { fromLocalInput } from '../lib/agenda'
+import { fromLocalInput, toLocalInput } from '../lib/agenda'
+import { Icon } from './Icon'
 import type { Activity, Outcome } from '../types'
 
 /**
@@ -73,6 +74,55 @@ export function ItemUpdate({ store, item, onDone }: { store: Store; item: Activi
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/** Set the date on an undated follow-up/appointment, or move it to a new one. */
+export function DueEdit({ store, item, onDone }: { store: Store; item: Activity; onDone(msg: string): void }) {
+  const [editing, setEditing] = useState(false)
+  const [when, setWhen] = useState(() => toLocalInput(item.dueAt))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const kind = item.outcome === 'appointment' ? 'appointment' : 'follow-up'
+
+  async function save() {
+    const due = fromLocalInput(when)
+    if (!due) {
+      setError(`Pick a date and time for the ${kind}.`)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await store.setDue(item.id, due)
+      setEditing(false)
+      onDone(item.dueAt ? 'Date changed' : 'Date set')
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <button className={`btn small${item.dueAt ? '' : ' route'}`} onClick={() => { setWhen(toLocalInput(item.dueAt)); setEditing(true) }}>
+        <Icon name="calendar" /> {item.dueAt ? 'Change date' : 'Set date'}
+      </button>
+    )
+  }
+  return (
+    <div className="section" style={{ gap: 8, flexBasis: '100%' }}>
+      <label className="field">
+        {item.outcome === 'appointment' ? 'Appointment date & time' : 'Follow-up date & time'}
+        <input id={`set-due-${item.id}`} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} required />
+      </label>
+      {error && <div className="err">{error}</div>}
+      <div className="row">
+        <button className="btn primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save date'}</button>
+        <button className="btn" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+      </div>
     </div>
   )
 }

@@ -158,7 +158,6 @@ function Field({ store }: { store: Store }) {
   const [itemsError, setItemsError] = useState<string | null>(null)
   const latestActivity = snap.activities[0]?.id
   useEffect(() => {
-    if (!snap.agendaReady) return
     let live = true
     store
       .openItems()
@@ -381,7 +380,7 @@ function Field({ store }: { store: Store }) {
         <span className={`live-pill${store.mode === 'demo' ? ' demo' : ''}`} title={store.mode === 'demo' ? 'Sample data on this phone only' : 'Connected to team data'}>
           <span className="live-dot" /> {store.mode === 'demo' ? 'Demo' : 'Live'}
         </span>
-        <button className="avatar" onClick={() => setTab('more')} aria-label="Settings">
+        <button className="avatar" onClick={() => { setOpenId(null); setPeekId(null); setTab('more') }} aria-label="Settings">
           {me.name.slice(0, 2).toUpperCase()}
         </button>
       </header>

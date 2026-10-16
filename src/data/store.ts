@@ -24,6 +24,8 @@ export interface Snapshot {
   mustChangePassword?: boolean
   /** Follow-up/appointment dates and status updates are available (database update 004 applied). */
   agendaReady: boolean
+  /** Dates on follow-ups/appointments can be set or changed afterwards (the newer 004 applied). */
+  canSetDates?: boolean
   /** Bumped when a follow-up/appointment is updated, so open agenda lists refresh. */
   itemsVersion?: number
 }
@@ -52,6 +54,8 @@ export interface Store {
    * update as its own entry, so the lead's status and history move forward.
    */
   resolveItem(itemId: string, result: Outcome, notes: string, nextDueAt?: string | null): Promise<void>
+  /** Sets or changes the date on an open follow-up/appointment (its agent or a manager). */
+  setDue(itemId: string, dueAt: string): Promise<void>
   /** Every disposition the viewer can see between two times, newest first (for reports). */
   activitiesBetween(from: Date, to: Date): Promise<Activity[]>
   claim(leadIds: string[], on: boolean): Promise<void>

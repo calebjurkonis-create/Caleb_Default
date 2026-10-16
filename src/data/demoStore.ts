@@ -1,5 +1,6 @@
 import type { Activity, Lead, LeadList, Member, Role } from '../types'
-import { STATUS } from '../lib/dispositions'
+import { DATED, STATUS } from '../lib/dispositions'
+import { currentItems } from '../lib/agenda'
 import { activeClaim } from '../lib/leads'
 import { buildSample, sampleNote, SAMPLE_MEMBERS } from './sample'
 import type { Snapshot, Store } from './store'
@@ -49,6 +50,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
 
   let data = load()
   let snapshot: Snapshot
+  let itemsVersion = 0
   const listeners = new Set<() => void>()
   const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(KEY) : null
 
@@ -63,6 +65,8 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       lists: data.lists,
       error: null,
       agendaReady: true,
+      canSetDates: true,
+      itemsVersion,
     }
   }
   snapshot = build()
@@ -161,7 +165,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       // A new knock on this door closes any earlier open item for it.
       const now = new Date().toISOString()
       data.activities = data.activities.map((a) =>
-        a.leadId === leadId && a.dueAt && !a.resolvedAt ? { ...a, resolvedAt: now, resolution: outcome } : a,
+        a.leadId === leadId && DATED.includes(a.outcome) && !a.resolvedAt ? { ...a, resolvedAt: now, resolution: outcome } : a,
       )
       record({
         id: uid(), leadId, leadLabel: labelFor(leadId), memberId: data.meId, channel: 'door', outcome, notes, createdAt: now,
@@ -170,9 +174,15 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       commit()
     },
     async openItems() {
-      return data.activities
-        .filter((a) => a.dueAt && !a.resolvedAt && a.leadId && data.leads.some((l) => l.id === a.leadId))
-        .sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))
+      return currentItems(data.activities, new Map(data.leads.map((l) => [l.id, l])))
+    },
+    async setDue(itemId, dueAt) {
+      const item = data.activities.find((a) => a.id === itemId)
+      if (!item || item.resolvedAt || !data.meId) throw new Error('That follow-up or appointment was already updated.')
+      if (item.memberId !== data.meId && data.role !== 'manager') throw new Error('Only the agent who set it, or a manager, can change its date.')
+      data.activities = data.activities.map((a) => (a.id === itemId ? { ...a, dueAt } : a))
+      itemsVersion++
+      commit()
     },
     async resolveItem(itemId, result, notes, nextDueAt) {
       const item = data.activities.find((a) => a.id === itemId)
@@ -184,6 +194,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
         id: uid(), leadId: item.leadId, leadLabel: item.leadLabel, memberId: data.meId, channel: 'update', outcome: result,
         notes, createdAt: now, dueAt: nextDueAt ?? null, resolvedAt: null, resolution: null,
       })
+      itemsVersion++
       commit()
     },
     async activitiesBetween(from, to) {

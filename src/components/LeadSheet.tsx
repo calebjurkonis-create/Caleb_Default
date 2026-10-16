@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { memberName, type Snapshot, type Store } from '../data/store'
 import { DATED, OUTCOMES, STATUS } from '../lib/dispositions'
-import { dueLabel, fromLocalInput } from '../lib/agenda'
-import { ItemUpdate } from './ItemUpdate'
+import { currentItems, dueLabel, fromLocalInput } from '../lib/agenda'
+import { DueEdit, ItemUpdate } from './ItemUpdate'
 import { activeClaim, cityLine, clockTime, formatPhone, fullName, houseNumberOf, navTarget, timeAgo, turning65 } from '../lib/leads'
 import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead, Outcome } from '../types'
@@ -176,7 +176,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           )}
         </div>
 
-        <OpenItem store={store} snap={snap} history={history} />
+        <OpenItem store={store} snap={snap} lead={lead} history={history} />
 
         <div className="section">
           <h3 style={{ fontSize: 20 }}>Door knock disposition</h3>
@@ -341,23 +341,29 @@ function PinTools({ store, lead, onPlacePin }: { store: Store; lead: Lead; onPla
 }
 
 /** The lead's open follow-up or appointment, with its status buttons (its agent and managers only). */
-function OpenItem({ store, snap, history }: { store: Store; snap: Snapshot; history: Activity[] | null }) {
+function OpenItem({ store, snap, lead, history }: { store: Store; snap: Snapshot; lead: Lead; history: Activity[] | null }) {
   const [msg, setMsg] = useState<string | null>(null)
-  const item = history?.find((a) => a.dueAt && !a.resolvedAt)
+  const item = history ? currentItems(history, new Map([[lead.id, lead]]))[0] : undefined
   const isManager = snap.me?.role === 'manager'
-  if (!item || !snap.agendaReady) return msg ? <div className="notice">{msg}</div> : null
+  if (!item) return msg ? <div className="notice">{msg}</div> : null
   if (item.memberId !== snap.me?.id && !isManager) return null
   return (
     <div className="card" style={{ borderColor: STATUS[item.outcome].color }}>
       <div>
         <span className="eyebrow">Open {item.outcome === 'appointment' ? 'appointment' : 'follow-up'}</span>
-        <div style={{ fontWeight: 600, fontSize: 18 }}>{dueLabel(item.dueAt!)}</div>
+        <div style={{ fontWeight: 600, fontSize: 18 }}>{item.dueAt ? dueLabel(item.dueAt) : 'No date yet'}</div>
         <div className="muted" style={{ fontSize: 14 }}>
           Set by {memberName(snap, item.memberId)}
           {item.notes && ` · “${item.notes}”`}
         </div>
       </div>
-      <ItemUpdate store={store} item={item} onDone={(m) => setMsg(m)} />
+      {msg && <div className="notice">{msg}</div>}
+      {snap.canSetDates && (
+        <div className="row">
+          <DueEdit store={store} item={item} onDone={(m) => setMsg(m)} />
+        </div>
+      )}
+      {snap.agendaReady && <ItemUpdate store={store} item={item} onDone={(m) => setMsg(m)} />}
     </div>
   )
 }
