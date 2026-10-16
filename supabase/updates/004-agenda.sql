@@ -2,7 +2,44 @@
 --  * Follow-up and appointment dates (the Agenda tab)
 --  * Status updates: follow-ups -> Booked / Not Interested; appointments -> Sold / Follow-Up / Not Interested
 --  * Follow-ups and appointments logged before dates existed show as "Undated" until someone sets one
+--  * Also includes update 1 (street pins; removing leads keeps their history), in case it was skipped
 
+-- ── Update 1 (included here in case it was skipped) ─────────────────────────
+-- Street-level pins
+alter table public.leads add column if not exists pin_approx boolean not null default false;
+
+-- Each visit remembers who it was about, so history survives the lead being removed.
+alter table public.activities add column if not exists lead_label text not null default '';
+update public.activities a
+   set lead_label = trim(l.first_name || ' ' || l.last_name) || ', ' || l.address || ', ' || l.city
+  from public.leads l
+ where l.id = a.lead_id and a.lead_label = '';
+
+create or replace function public.label_activity() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  select trim(first_name || ' ' || last_name) || ', ' || address || ', ' || city
+    into new.lead_label
+    from public.leads where id = new.lead_id;
+  new.lead_label := coalesce(new.lead_label, '');
+  return new;
+end $$;
+
+drop trigger if exists before_activity_insert on public.activities;
+create trigger before_activity_insert before insert on public.activities
+  for each row execute function public.label_activity();
+
+-- Removing a lead now keeps its visits (unlinked) instead of deleting them.
+alter table public.activities alter column lead_id drop not null;
+alter table public.activities drop constraint if exists activities_lead_id_fkey;
+alter table public.activities add constraint activities_lead_id_fkey
+  foreign key (lead_id) references public.leads (id) on delete set null;
+
+drop policy if exists "see activity on visible leads" on public.activities;
+create policy "see activity on visible leads" on public.activities for select to authenticated
+  using (lead_id is null or exists (select 1 from public.leads l where l.id = lead_id));
+
+-- ── Update 4 ────────────────────────────────────────────────────────────────
 alter table public.activities add column if not exists due_at timestamptz;
 alter table public.activities add column if not exists resolved_at timestamptz;
 alter table public.activities add column if not exists resolution text;

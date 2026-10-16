@@ -47,7 +47,7 @@ Run each file in [`supabase/updates/`](supabase/updates/) once, in order, in the
 (`schema.sql` already includes them for brand-new setups):
 - `001-keep-history-and-street-pins.sql`: street-level pins; removing leads keeps their door-knock history.
 - `003-app-settings.sql`: shared settings, used for the road-routing key.
-- `004-agenda.sql`: dates on appointments and follow-ups, the Agenda tab, and status updates (Sold, Booked…).
+- `004-agenda.sql`: dates on appointments and follow-ups, the Agenda tab, and status updates (Sold, Booked…). Also includes 001.
 
 #### Adding and removing people later
 - **Add:** Authentication → Users → Add user → Create new user (step 4), then set their name and role in the app's Team tab.
