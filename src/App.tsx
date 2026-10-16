@@ -702,7 +702,6 @@ function Field({ store }: { store: Store }) {
             store={store}
             snap={snap}
             onClose={() => setTab('map')}
-            onOpenLead={openFromList}
             onImport={() => setImporting(true)}
             onDrawZone={startZoneDraw}
             onFindGated={findGatedHere}

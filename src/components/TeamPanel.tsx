@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { activityLeadName, memberName, type Snapshot, type Store } from '../data/store'
-import { STATUS } from '../lib/dispositions'
-import { activeClaim, clockTime, isToday, shortName, timeAgo } from '../lib/leads'
+import { memberName, type Snapshot, type Store } from '../data/store'
+import { activeClaim, isToday, timeAgo } from '../lib/leads'
 import { agentRows, dispositionsCsv, fileStamp, leaderboardCsv, periodRange, PERIODS, ratioLabel, saveFile, type AgentRow, type Period } from '../lib/reports'
-import type { Activity, GatedZone, Lead } from '../types'
+import type { Activity, GatedZone } from '../types'
 import { Icon } from './Icon'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 import { buildBackup, lastBackupAt, markBackedUp } from '../lib/backup'
@@ -14,7 +13,6 @@ interface Props {
   store: Store
   snap: Snapshot
   onClose(): void
-  onOpenLead(l: Lead): void
   onImport(): void
   onDrawZone(): void
   onFindGated(): void
@@ -32,7 +30,7 @@ const COLUMNS: { key: SortKey; label: string; title: string }[] = [
   { key: 'ratio', label: '+/−', title: 'Appointments + follow-ups against not interested' },
 ]
 
-export function TeamPanel({ store, snap, onClose, onOpenLead, onImport, onDrawZone, onFindGated, onShowZone }: Props) {
+export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGated, onShowZone }: Props) {
   const isManager = snap.me?.role === 'manager'
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>('month')
@@ -208,40 +206,6 @@ export function TeamPanel({ store, snap, onClose, onOpenLead, onImport, onDrawZo
             </div>
           )}
           {exportMsg && <div className="muted" style={{ fontSize: 14 }}>{exportMsg}</div>}
-        </div>
-
-        <div className="section">
-          <h3 style={{ fontSize: 20 }}>Live activity</h3>
-          {snap.activities.length === 0 ? (
-            <div className="muted">Dispositions from the whole team show up here as they happen.</div>
-          ) : (
-            <ul className="feed">
-              {snap.activities.slice(0, 40).map((a) => {
-                const lead = leadById.get(a.leadId)
-                return (
-                  <li key={a.id}>
-                    <span className="dot" style={{ background: STATUS[a.outcome].color }} />
-                    <div>
-                      <div>
-                        <b>{memberName(snap, a.memberId)}</b> {a.channel === 'update' ? 'updated' : 'knocked'}{' '}
-                        {lead ? (
-                          <button className="link" onClick={() => onOpenLead(lead)}>{shortName(lead)}</button>
-                        ) : (
-                          activityLeadName(a, undefined)
-                        )}{' '}
-                        · {STATUS[a.outcome].label}
-                      </div>
-                      <div className="muted" style={{ fontSize: 13 }}>
-                        {isToday(a.createdAt) ? clockTime(a.createdAt) : timeAgo(a.createdAt)}
-                        {lead && ` · ${lead.city}`}
-                      </div>
-                      {a.notes && <div style={{ fontSize: 14 }}>“{a.notes}”</div>}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
         </div>
 
         {isManager && (
