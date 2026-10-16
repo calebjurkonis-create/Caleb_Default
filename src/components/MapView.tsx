@@ -38,6 +38,8 @@ interface Props {
   /** OpenStreetMap suggestions a manager is reviewing; the active one is highlighted. */
   suggestions?: Suggestion[]
   activeSuggestion?: string | null
+  /** Lasso color (red while drawing a gated area). */
+  drawColor?: string
 }
 
 const TILES = {
@@ -183,8 +185,8 @@ export function MapView(props: Props) {
     if (!group || !m || !zoneRenderer.current) return
     group.clearLayers()
     const css = getComputedStyle(document.documentElement)
-    const ink = css.getPropertyValue('--gated').trim() || '#33415c'
-    const routeColor = css.getPropertyValue('--route').trim() || '#f2b632'
+    // Red, so gated areas never get mixed up with the yellow route line.
+    const ink = css.getPropertyValue('--gated').trim() || '#c62828'
     const named = m.getZoom() >= 14
     for (const z of props.zones) {
       if (z.status !== 'active' || z.points.length < 3) continue
@@ -205,7 +207,7 @@ export function MapView(props: Props) {
       const on = s.osmId === props.activeSuggestion
       L.polygon(s.points, {
         renderer: zoneRenderer.current, pane: 'zones', interactive: false,
-        color: routeColor, weight: on ? 4 : 2, dashArray: on ? undefined : '4 6', fillColor: routeColor, fillOpacity: on ? 0.25 : 0.08,
+        color: ink, weight: on ? 4 : 2, dashArray: on ? undefined : '4 6', fillColor: ink, fillOpacity: on ? 0.22 : 0.08,
       }).addTo(group)
     }
   }, [props.zones, props.suggestions, props.activeSuggestion, props.themeKey, view])
@@ -259,13 +261,13 @@ export function MapView(props: Props) {
   return (
     <>
       <div ref={el} className={`map${props.onMapTap ? ' placing' : ''}`} />
-      {props.drawing && map.current && <Lasso map={map.current} onDone={props.onLasso} />}
+      {props.drawing && map.current && <Lasso map={map.current} onDone={props.onLasso} color={props.drawColor} />}
     </>
   )
 }
 
 /** Freehand lasso: drag a loop around the houses you want. */
-function Lasso({ map, onDone }: { map: L.Map; onDone(poly: Point[]): void }) {
+function Lasso({ map, onDone, color = '#f2b632' }: { map: L.Map; onDone(poly: Point[]): void; color?: string }) {
   const [pts, setPts] = useState<[number, number][]>([])
   const drawing = useRef(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -307,8 +309,9 @@ function Lasso({ map, onDone }: { map: L.Map; onDone(poly: Point[]): void }) {
         {pts.length > 1 && (
           <polygon
             points={pts.map((p) => p.join(',')).join(' ')}
-            fill="rgba(242,182,50,0.18)"
-            stroke="#f2b632"
+            fill={color}
+            fillOpacity={0.18}
+            stroke={color}
             strokeWidth={3}
             strokeDasharray="6 5"
             strokeLinejoin="round"

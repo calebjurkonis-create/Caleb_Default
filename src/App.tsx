@@ -499,6 +499,7 @@ function Field({ store }: { store: Store }) {
           onLasso={onLasso}
           onReady={(h) => (mapRef.current = h)}
           zones={snap.zones}
+          drawColor={zoneDraw ? getComputedStyle(document.documentElement).getPropertyValue('--gated').trim() || '#c62828' : undefined}
           suggestions={review ? [review.list[review.i]] : pendingZone ? [{ osmId: 'new', name: '', points: pendingZone, reason: '' }] : undefined}
           activeSuggestion={review ? review.list[review.i].osmId : pendingZone ? 'new' : null}
         />

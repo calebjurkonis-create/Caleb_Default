@@ -374,8 +374,8 @@ input[type='datetime-local'] {
 .bucket-head { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
 .agenda-item.undated .when { color: var(--muted); }
 /* Gated areas */
-:root { --gated: #33415c; }
-@media (prefers-color-scheme: dark) { :root { --gated: #c7d2e3; } }
+:root { --gated: #c62828; }
+@media (prefers-color-scheme: dark) { :root { --gated: #ff6b6b; } }
 .zone-label { pointer-events: none; }
 .zone-label span {
   position: absolute; transform: translate(-50%, -115%); white-space: nowrap;
