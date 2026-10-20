@@ -65,6 +65,7 @@ export function MapView(props: Props) {
   const routeLayer = useRef<L.LayerGroup | null>(null)
   const zoneLayer = useRef<L.LayerGroup | null>(null)
   const zoneRenderer = useRef<L.SVG | null>(null)
+  const routeRenderer = useRef<L.SVG | null>(null)
   const meLayer = useRef<L.Marker | null>(null)
   const onTap = useRef(props.onTap)
   onTap.current = props.onTap
@@ -80,15 +81,26 @@ export function MapView(props: Props) {
   useEffect(() => {
     if (!el.current || map.current) return
     const m = L.map(el.current, { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([28.42, -81.5], 10)
-    // Gated areas sit in their own layer under the pins and never catch taps.
-    m.createPane('zones').style.zIndex = '350'
+    // Fixed layers, bottom to top: gated areas, the route line, then the lead pins. Each draws
+    // on its own surface; if the route line shared the pins' layer, its surface could end up on
+    // top and swallow taps meant for the pins.
+    const zonePane = m.createPane('zones')
+    zonePane.style.zIndex = '350'
+    zonePane.style.pointerEvents = 'none'
     zoneRenderer.current = L.svg({ pane: 'zones' })
+    const routePane = m.createPane('routeLine')
+    routePane.style.zIndex = '380'
+    routePane.style.pointerEvents = 'none'
+    routeRenderer.current = L.svg({ pane: 'routeLine' })
+    m.createPane('pins').style.zIndex = '420'
     zoneLayer.current = L.layerGroup().addTo(m)
     pins.current = L.layerGroup().addTo(m)
     routeLayer.current = L.layerGroup().addTo(m)
     m.on('moveend', () => setView((v) => v + 1))
     m.on('click', (e: L.LeafletMouseEvent) => onMapTap.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }))
     map.current = m
+    // Lets automated tests find pins on the map (development builds only).
+    if (import.meta.env.DEV) (window as unknown as { __kmap?: L.Map }).__kmap = m
     props.onReady({
       flyTo: (p, zoom) => m.flyTo([p.lat, p.lng], zoom ?? Math.max(m.getZoom(), 16), { duration: 0.6 }),
       fit: (pts) => {
@@ -130,7 +142,7 @@ export function MapView(props: Props) {
     const group = pins.current
     const m = map.current
     if (!group || !m) return
-    renderer.current ??= L.canvas({ padding: 0.5, tolerance: 6 })
+    renderer.current ??= L.canvas({ padding: 0.5, tolerance: 6, pane: 'pins' })
     const bounds = m.getBounds().pad(0.3)
     const far = m.getZoom() <= 10
     const colors = new Map<string, string>()
@@ -163,7 +175,7 @@ export function MapView(props: Props) {
         if (focus) existing.bringToFront()
       } else {
         const id = lead.id
-        const mk = L.circleMarker([lead.lat, lead.lng], { renderer: renderer.current, radius, ...style })
+        const mk = L.circleMarker([lead.lat, lead.lng], { renderer: renderer.current, pane: 'pins', radius, ...style })
           .on('click', () => {
             const l = leadById.current.get(id)
             if (l) onTap.current(l)
@@ -229,8 +241,9 @@ export function MapView(props: Props) {
           ...(props.routeEnd ? [[props.routeEnd.lat, props.routeEnd.lng] as L.LatLngTuple] : []),
         ]
     const routeColor = getComputedStyle(document.documentElement).getPropertyValue('--route').trim() || '#f2b632'
-    L.polyline(line, { color: '#10202e', weight: 7, opacity: 0.35, interactive: false }).addTo(group)
-    L.polyline(line, { color: routeColor, weight: 4, dashArray: '8 8', interactive: false }).addTo(group)
+    const lineStyle = { renderer: routeRenderer.current ?? undefined, pane: 'routeLine', interactive: false }
+    L.polyline(line, { ...lineStyle, color: '#10202e', weight: 7, opacity: 0.35 }).addTo(group)
+    L.polyline(line, { ...lineStyle, color: routeColor, weight: 4, dashArray: '8 8' }).addTo(group)
     stops.forEach((s, i) => {
       const done = props.doneStops.has(s.id)
       L.marker([s.lat!, s.lng!], {
