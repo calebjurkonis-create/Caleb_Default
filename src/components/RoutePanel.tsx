@@ -7,7 +7,7 @@ import { Icon } from './Icon'
 
 interface Props {
   /** Real driving totals for the whole route when road routing is on. */
-  road: { miles: number; minutes: number } | null
+  road: { miles: number; minutes: number; partial?: boolean } | null
   /** Waiting on the routing service to order stops. */
   planning: boolean
   stops: Lead[]
@@ -45,7 +45,7 @@ export function RoutePanel(p: Props) {
             <div className="muted num" style={{ marginTop: 4 }}>
               {p.done.size} of {p.stops.length} done · {remaining.length} left ·{' '}
               {p.road
-                ? `${p.road.miles.toFixed(1)} mi · ${p.road.minutes} min driving (whole route, by road)`
+                ? `${p.road.miles.toFixed(1)} mi · ${p.road.minutes} min driving (${p.road.partial ? 'by road; a few legs estimated' : 'whole route, by road'})`
                 : `~${est.miles.toFixed(1)} mi · ~${est.driveMin} min driving`}
             </div>
           )}

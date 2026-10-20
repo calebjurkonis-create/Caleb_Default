@@ -318,23 +318,32 @@ function Field({ store }: { store: Store }) {
 
   // Draw the route along real roads whenever its stops change (only with a routing key).
   const pathSig = route && roadKey ? `${route.start?.lat},${route.start?.lng}|${route.ids.join(',')}` : ''
+  // If routing is briefly unavailable (no signal, busy service), try again a few times.
+  const [pathTry, setPathTry] = useState(0)
+  useEffect(() => setPathTry(0), [pathSig])
   useEffect(() => {
     if (!pathSig || !route || route.path?.sig === pathSig) return
     const pts = routeLeads.filter((l) => l.lat != null && l.lng != null) as Point[]
     const points = route.start ? [route.start, ...pts] : pts
     let live = true
+    let retry: ReturnType<typeof setTimeout> | undefined
     const t = setTimeout(() => {
       roadPath(roadKey, points).then((p) => {
-        if (!live || !p) return
+        if (!live) return
+        if (!p) {
+          if (pathTry < 3) retry = setTimeout(() => setPathTry((n) => n + 1), 20_000)
+          return
+        }
         setRoute({ ...route, path: { ...p, sig: pathSig } })
       })
     }, 400)
     return () => {
       live = false
       clearTimeout(t)
+      clearTimeout(retry)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathSig, routeLeads.length])
+  }, [pathSig, routeLeads.length, pathTry])
   const roadLine = route?.path && route.path.sig === pathSig ? route.path : null
 
   async function endRoute() {
@@ -668,7 +677,7 @@ function Field({ store }: { store: Store }) {
 
         {!overlay && tab === 'route' && (
           <RoutePanel
-            road={roadLine ? { miles: roadLine.miles, minutes: roadLine.minutes } : null}
+            road={roadLine ? { miles: roadLine.miles, minutes: roadLine.minutes, partial: roadLine.partial } : null}
             planning={routing}
             stops={routeLeads}
             done={doneStops}
