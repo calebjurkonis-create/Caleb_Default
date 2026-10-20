@@ -10,13 +10,15 @@ import { RoutePanel } from './components/RoutePanel'
 import { TeamPanel } from './components/TeamPanel'
 import { AgendaPanel } from './components/AgendaPanel'
 import { PeekCard } from './components/PeekCard'
+import { EndPicker } from './components/EndPicker'
 import { dueNowCount } from './lib/agenda'
 import { findGated, zoneAt, zoneLabel, type Suggestion } from './lib/gated'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
 import { STATUS, STATUS_ORDER } from './lib/dispositions'
 import { activeClaim } from './lib/leads'
 import { effectiveRoadKey, orderByRoads, roadPath, type RoadPath } from './lib/roads'
-import { insidePolygon, milesBetween, optimizeOrder, type NavApp, type Point } from './lib/route'
+import { detourMiles, insidePolygon, milesBetween, optimizeOrder, type NavApp, type Point } from './lib/route'
+import { endName, endPlace, type EndChoice, type Place, type SavedPlaces } from './lib/places'
 import type { Activity, Lead, LeadStatus, Outcome } from './types'
 
 type Tab = 'map' | 'route' | 'leads' | 'agenda' | 'team' | 'more'
@@ -36,6 +38,8 @@ interface SavedRoute {
   startedAt: string
   /** Where the route was planned from, so the road path can start there. */
   start?: Point
+  /** Where the route finishes (home, office…), if anywhere. */
+  end?: Place | null
   /** Road-following path for these exact stops (sig = ids it was drawn for). */
   path?: RoadPath & { sig: string }
 }
@@ -106,6 +110,10 @@ function Field({ store }: { store: Store }) {
   const [here, setHere] = useState<Point | null>(null)
   const [route, setRoute] = usePref<SavedRoute | null>(`knockroute-route-${me.id}`, null)
   const [navApp, setNavApp] = usePref<NavApp>('knockroute-nav', 'apple')
+  // Where routes finish (home, office, an address). Saved on this phone only, per person.
+  const [places, setPlaces] = usePref<SavedPlaces>(`knockroute-places-${me.id}`, {})
+  const [endChoice, setEndChoice] = usePref<EndChoice>(`knockroute-end-${me.id}`, { kind: 'none' })
+  const chosenEnd = endPlace(endChoice, places)
   const [satellite, setSatellite] = usePref('knockroute-sat', false)
   const [themeKey, setThemeKey] = useState('')
   const [assignTo, setAssignTo] = useState('')
@@ -245,6 +253,22 @@ function Field({ store }: { store: Store }) {
 
   const routable = (l: Lead) => l.lat != null && l.lng != null && !STATUS[l.status].closed && !claimedByOthers.has(l.id)
 
+  /** Best order for the stops from `start` (finishing at `end`, if set): by road when the service answers. */
+  async function orderStops(start: Point, stops: Lead[], end: Place | null): Promise<Lead[]> {
+    let ordered = optimizeOrder(start, stops as (Lead & Point)[], end)
+    if (roadKey) {
+      // Order by real drive time when the routing service answers; otherwise keep the straight-line order.
+      setRouting(true)
+      const ids = await orderByRoads(roadKey, start, ordered, end)
+      setRouting(false)
+      if (ids) {
+        const byLead = new Map(ordered.map((l) => [l.id, l]))
+        ordered = ids.map((id) => byLead.get(id)!)
+      }
+    }
+    return ordered
+  }
+
   async function planRoute(leads: Lead[]) {
     const stops = leads.filter(routable)
     if (!stops.length) {
@@ -252,22 +276,13 @@ function Field({ store }: { store: Store }) {
       return
     }
     const start = here ?? mapRef.current?.center() ?? (stops[0] as Point)
-    let ordered = optimizeOrder(start, stops as (Lead & Point)[])
-    if (roadKey) {
-      // Order by real drive time when the routing service answers; otherwise keep the straight-line order.
-      setRouting(true)
-      const ids = await orderByRoads(roadKey, start, ordered)
-      setRouting(false)
-      if (ids) {
-        const byLead = new Map(ordered.map((l) => [l.id, l]))
-        ordered = ids.map((id) => byLead.get(id)!)
-      }
-    }
+    const end = chosenEnd
+    const ordered = await orderStops(start, stops, end)
     if (route) await releaseDoors(route.ids.filter((id) => !ordered.some((o) => o.id === id)))
-    setRoute({ ids: ordered.map((l) => l.id), startedAt: new Date().toISOString(), start: { lat: start.lat, lng: start.lng } })
+    setRoute({ ids: ordered.map((l) => l.id), startedAt: new Date().toISOString(), start: { lat: start.lat, lng: start.lng }, end })
     await claimDoors(ordered.map((l) => l.id))
     setSelection(new Set())
-    mapRef.current?.fit(ordered as Point[])
+    mapRef.current?.fit([...(ordered as Point[]), ...(end ? [end] : [])])
     setTab('route')
     flash(`Route planned: ${ordered.length} stops`)
   }
@@ -277,7 +292,10 @@ function Field({ store }: { store: Store }) {
     if (!start) return
     // Only what's showing on the map, so hidden dispositions don't end up on the route.
     const pool = mapLeads.filter((l) => routable(l) && !route?.ids.includes(l.id))
-    pool.sort((a, b) => milesBetween(start, a as Point) - milesBetween(start, b as Point))
+    // With an end point: the doors that are least out of the way on the drive there.
+    const end = chosenEnd
+    const cost = (l: Lead) => (end ? detourMiles(start, end, l as Point) : milesBetween(start, l as Point))
+    pool.sort((a, b) => cost(a) - cost(b))
     planRoute(pool.slice(0, n))
   }
 
@@ -288,43 +306,45 @@ function Field({ store }: { store: Store }) {
     } else {
       const ids = [...(route?.ids ?? []), l.id]
       const leads = ids.map((id) => byId.get(id)).filter((x): x is Lead => !!x && x.lat != null)
-      const start = here ?? (leads[0] as Point)
-      const ordered = optimizeOrder(start, leads as (Lead & Point)[])
-      setRoute({ ids: ordered.map((x) => x.id), startedAt: route?.startedAt ?? new Date().toISOString() })
+      const start = here ?? route?.start ?? (leads[0] as Point)
+      const end = route ? route.end ?? null : chosenEnd
+      const ordered = optimizeOrder(start, leads as (Lead & Point)[], end)
+      setRoute({ ids: ordered.map((x) => x.id), startedAt: route?.startedAt ?? new Date().toISOString(), start: { lat: start.lat, lng: start.lng }, end })
       await claimDoors([l.id])
       flash(`Added as stop ${ordered.findIndex((x) => x.id === l.id) + 1}`)
     }
   }
 
-  async function reoptimize() {
+  async function reoptimize(newEnd?: Place | null, endLabel?: string | null) {
     if (!route) return
+    const end = newEnd === undefined ? route.end ?? null : newEnd
     const remaining = routeLeads.filter((l) => !doneStops.has(l.id))
     const done = routeLeads.filter((l) => doneStops.has(l.id))
-    const start = here ?? (remaining[0] as Point)
+    const start = here ?? route.start ?? (remaining[0] as Point)
     if (!start) return
-    let ordered = optimizeOrder(start, remaining as (Lead & Point)[])
-    if (roadKey) {
-      setRouting(true)
-      const ids = await orderByRoads(roadKey, start, ordered)
-      setRouting(false)
-      if (ids) {
-        const byLead = new Map(ordered.map((l) => [l.id, l]))
-        ordered = ids.map((id) => byLead.get(id)!)
-      }
-    }
-    setRoute({ ...route, ids: [...done, ...ordered].map((l) => l.id), start: { lat: start.lat, lng: start.lng } })
-    flash('Re-ordered from your location')
+    const ordered = await orderStops(start, remaining, end)
+    setRoute({ ...route, ids: [...done, ...ordered].map((l) => l.id), start: { lat: start.lat, lng: start.lng }, end })
+    flash(newEnd === undefined ? 'Re-ordered from your location' : end ? `Re-ordered to finish at ${endLabel ?? 'the new end point'}` : 'Route no longer has an end point')
+  }
+
+  // Picking a new end point re-orders a route that's already going.
+  function changeEnd(choice: EndChoice, nextPlaces = places) {
+    setEndChoice(choice)
+    const end = endPlace(choice, nextPlaces)
+    // Choosing Home/Office before it's saved only opens the address box; nothing to re-order yet.
+    if (choice.kind !== 'none' && !end) return
+    if (route && routeLeads.length) reoptimize(end, endName(choice, nextPlaces))
   }
 
   // Draw the route along real roads whenever its stops change (only with a routing key).
-  const pathSig = route && roadKey ? `${route.start?.lat},${route.start?.lng}|${route.ids.join(',')}` : ''
+  const pathSig = route && roadKey ? `${route.start?.lat},${route.start?.lng}|${route.ids.join(',')}|${route.end ? `${route.end.lat},${route.end.lng}` : ''}` : ''
   // If routing is briefly unavailable (no signal, busy service), try again a few times.
   const [pathTry, setPathTry] = useState(0)
   useEffect(() => setPathTry(0), [pathSig])
   useEffect(() => {
     if (!pathSig || !route || route.path?.sig === pathSig) return
     const pts = routeLeads.filter((l) => l.lat != null && l.lng != null) as Point[]
-    const points = route.start ? [route.start, ...pts] : pts
+    const points = [...(route.start ? [route.start] : []), ...pts, ...(route.end && pts.length ? [route.end] : [])]
     let live = true
     let retry: ReturnType<typeof setTimeout> | undefined
     const t = setTimeout(() => {
@@ -484,6 +504,7 @@ function Field({ store }: { store: Store }) {
           route={routeLeads}
           roadLine={roadLine?.line}
           doneStops={doneStops}
+          routeEnd={route?.end ?? null}
           me={here}
           focusId={openId ?? peekId}
           drawing={drawing}
@@ -604,7 +625,7 @@ function Field({ store }: { store: Store }) {
             </div>
             <div className="row">
               <button className="btn route" disabled={!selectedOpen} onClick={() => planRoute(selected)}>
-                <Icon name="route" /> Plan route ({selectedOpen})
+                <Icon name="route" /> Plan route ({selectedOpen}){chosenEnd ? ` · ends at ${endName(endChoice, places)}` : ''}
               </button>
             </div>
             {isManager && (
@@ -687,7 +708,17 @@ function Field({ store }: { store: Store }) {
             onClose={() => setTab('map')}
             onOpenLead={(l) => { setPeekId(null); setOpenId(l.id); if (l.lat != null) mapRef.current?.flyTo(l as Point) }}
             onRemove={(id) => { const l = byId.get(id); if (l) toggleOnRoute(l) }}
-            onReoptimize={reoptimize}
+            onReoptimize={() => reoptimize()}
+            end={route?.end ?? (route ? null : chosenEnd)}
+            endPicker={
+              <EndPicker
+                places={places}
+                choice={endChoice}
+                here={here}
+                onChoice={(c) => changeEnd(c, places)}
+                onSaved={(c, p) => { setPlaces(p); changeEnd(c, p) }}
+              />
+            }
             onEnd={endRoute}
             onNearest={nearest}
             onDraw={() => { setTab('map'); setZoneDraw(false); setDrawing(true) }}

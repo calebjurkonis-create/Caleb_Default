@@ -23,6 +23,8 @@ interface Props {
   /** Road-following path for the route ([lat, lng] pairs); straight lines between stops when absent. */
   roadLine?: [number, number][]
   doneStops: Set<string>
+  /** Where the route finishes (home, office…), if it has an end point. */
+  routeEnd?: Point | null
   me: Point | null
   focusId: string | null
   drawing: boolean
@@ -224,6 +226,7 @@ export function MapView(props: Props) {
       : [
           ...(props.me ? [[props.me.lat, props.me.lng] as L.LatLngTuple] : []),
           ...stops.map((s) => [s.lat!, s.lng!] as L.LatLngTuple),
+          ...(props.routeEnd ? [[props.routeEnd.lat, props.routeEnd.lng] as L.LatLngTuple] : []),
         ]
     const routeColor = getComputedStyle(document.documentElement).getPropertyValue('--route').trim() || '#f2b632'
     L.polyline(line, { color: '#10202e', weight: 7, opacity: 0.35, interactive: false }).addTo(group)
@@ -238,7 +241,15 @@ export function MapView(props: Props) {
         .on('click', () => onTap.current(s))
         .addTo(group)
     })
-  }, [props.route, props.roadLine, props.doneStops, props.me, props.themeKey])
+    if (props.routeEnd) {
+      L.marker([props.routeEnd.lat, props.routeEnd.lng], {
+        icon: L.divIcon({ className: '', html: '<div class="end-pin"><span>END</span></div>', iconSize: [30, 30], iconAnchor: [15, 15] }),
+        zIndexOffset: 1001,
+        keyboard: false,
+        interactive: false,
+      }).addTo(group)
+    }
+  }, [props.route, props.roadLine, props.doneStops, props.me, props.routeEnd, props.themeKey])
 
   // My location.
   useEffect(() => {

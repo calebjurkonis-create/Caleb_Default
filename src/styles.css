@@ -385,3 +385,11 @@ input[type='datetime-local'] {
 .tag.gated { border-style: dashed; border-color: var(--gated); }
 .zone-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
 .zone-row .row > .btn { flex: 0 1 auto; }
+.end-picker { gap: 8px; padding: 12px; }
+.end-picker .muted svg { width: 14px; height: 14px; vertical-align: -2px; }
+.end-pin {
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; transform: rotate(45deg);
+  background: var(--ink); border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+}
+.end-pin span { transform: rotate(-45deg); color: var(--surface); font-family: var(--f-display); font-weight: 700; font-size: 12px; }
+.end-picker .row > .btn { flex: 0 0 auto; }

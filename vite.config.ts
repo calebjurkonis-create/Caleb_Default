@@ -4,6 +4,7 @@ import { POST as geocode } from './api/geocode'
 import { POST as geocodeFallback } from './api/geocode-fallback'
 import { POST as roads } from './api/roads'
 import { POST as gated } from './api/gated'
+import { POST as place } from './api/place'
 
 // Serves /api/geocode during `npm run dev`, the same way Vercel serves it in production.
 function localApi(): Plugin {
@@ -12,6 +13,7 @@ function localApi(): Plugin {
     '/api/geocode-fallback': geocodeFallback,
     '/api/roads': roads,
     '/api/gated': gated,
+    '/api/place': place,
   }
   return {
     name: 'local-api',

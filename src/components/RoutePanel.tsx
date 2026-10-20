@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { STATUS } from '../lib/dispositions'
 import { cityLine, houseNumberOf, navTarget, shortName } from '../lib/leads'
 import { googleRouteLegs, navUrl, routeEstimate, type NavApp, type Point } from '../lib/route'
@@ -24,6 +24,10 @@ interface Props {
   onDraw(): void
   /** Name of the gated area a stop is in, if any (a heads-up; the stop stays on the route). */
   gatedAt(l: Lead): string | null
+  /** Where the route finishes, if anywhere. */
+  end: Point | null
+  /** The "ends at" chooser. */
+  endPicker: ReactNode
 }
 
 export function RoutePanel(p: Props) {
@@ -31,8 +35,8 @@ export function RoutePanel(p: Props) {
   const remaining = p.stops.filter((s) => !p.done.has(s.id))
   const next = remaining[0]
   const start = p.me ?? (p.stops[0] ? { lat: p.stops[0].lat!, lng: p.stops[0].lng! } : null)
-  const est = start ? routeEstimate(start, remaining as Point[]) : null
-  const legs = googleRouteLegs(p.me, remaining as Point[])
+  const est = start ? routeEstimate(start, remaining as Point[], p.end) : null
+  const legs = googleRouteLegs(p.me, remaining as Point[], p.end)
   const gatedLeft = remaining.filter((s) => p.gatedAt(s)).length
 
   return (
@@ -63,11 +67,14 @@ export function RoutePanel(p: Props) {
               <h3>Build a route</h3>
               <div>Pick the doors you want to hit. KnockRoute orders them for the shortest drive and marks them as yours so teammates plan around you.</div>
             </div>
+            {p.endPicker}
             <button className="btn route block" onClick={p.onDraw}>
               <Icon name="lasso" /> Draw around an area
             </button>
             <div className="card">
-              <div style={{ fontWeight: 600 }}>Or take the closest open leads to {p.me ? 'you' : 'the map center'}</div>
+              <div style={{ fontWeight: 600 }}>
+                {p.end ? 'Or take the open leads least out of your way to the end point' : `Or take the closest open leads to ${p.me ? 'you' : 'the map center'}`}
+              </div>
               <div className="row">
                 <button className="btn small" onClick={() => setN(Math.max(5, n - 5))} aria-label="Fewer stops">
                   <Icon name="minus" />
@@ -113,6 +120,8 @@ export function RoutePanel(p: Props) {
                 <div>Every stop has a disposition. Nice work.</div>
               </div>
             )}
+
+            {p.endPicker}
 
             <div className="row">
               {legs.map((url, i) => (

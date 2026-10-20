@@ -14,12 +14,39 @@ export function milesBetween(a: Point, b: Point): number {
 }
 
 /**
- * Orders stops for the shortest drive from `start`: nearest-neighbor, then 2-opt clean-up.
+ * Orders stops for the shortest drive from `start` (and on to `end`, when the route has a
+ * destination): nearest-neighbor or cheapest insertion, then 2-opt clean-up.
  * Straight-line distance is a good stand-in for road distance inside a neighborhood,
  * and it keeps planning free and instant with no routing service.
  */
-export function optimizeOrder<T extends Point>(start: Point, stops: T[]): T[] {
+export function optimizeOrder<T extends Point>(start: Point, stops: T[], end?: Point | null): T[] {
   if (stops.length < 2) return [...stops]
+  const order: T[] = end ? insertionOrder(start, stops, end) : nearestOrder(start, stops)
+
+  // 2-opt on a path anchored at `start` (and at `end`, which never moves).
+  const path: Point[] = end ? [start, ...order, end] : [start, ...order]
+  const last = end ? path.length - 2 : path.length - 1
+  const d = (i: number, j: number) => milesBetween(path[i], path[j])
+  let improved = true
+  let passes = 0
+  while (improved && passes++ < 50) {
+    improved = false
+    for (let i = 1; i < last; i++) {
+      for (let k = i + 1; k <= last; k++) {
+        const before = d(i - 1, i) + (k + 1 < path.length ? d(k, k + 1) : 0)
+        const after = d(i - 1, k) + (k + 1 < path.length ? d(i, k + 1) : 0)
+        if (after + 1e-9 < before) {
+          const rev = path.slice(i, k + 1).reverse()
+          path.splice(i, rev.length, ...rev)
+          improved = true
+        }
+      }
+    }
+  }
+  return path.slice(1, last + 1) as T[]
+}
+
+function nearestOrder<T extends Point>(start: Point, stops: T[]): T[] {
   const remaining = [...stops]
   const order: T[] = []
   let here: Point = start
@@ -36,34 +63,40 @@ export function optimizeOrder<T extends Point>(start: Point, stops: T[]): T[] {
     here = remaining.splice(best, 1)[0]
     order.push(here as T)
   }
+  return order
+}
 
-  // 2-opt on an open path anchored at `start`.
-  const path: Point[] = [start, ...order]
-  const d = (i: number, j: number) => milesBetween(path[i], path[j])
-  let improved = true
-  let passes = 0
-  while (improved && passes++ < 50) {
-    improved = false
-    for (let i = 1; i < path.length - 1; i++) {
-      for (let k = i + 1; k < path.length; k++) {
-        const before = d(i - 1, i) + (k + 1 < path.length ? d(k, k + 1) : 0)
-        const after = d(i - 1, k) + (k + 1 < path.length ? d(i, k + 1) : 0)
-        if (after + 1e-9 < before) {
-          const rev = path.slice(i, k + 1).reverse()
-          path.splice(i, rev.length, ...rev)
-          improved = true
-        }
+/** With a destination: grow the trip by slotting each stop wherever it adds the least driving. */
+function insertionOrder<T extends Point>(start: Point, stops: T[], end: Point): T[] {
+  // Farthest-from-the-straight-line stops first gives a better outline to fill in.
+  const detour = (s: Point) => milesBetween(start, s) + milesBetween(s, end)
+  const todo = [...stops].sort((a, b) => detour(b) - detour(a))
+  const path: Point[] = [start, end]
+  for (const s of todo) {
+    let best = 1
+    let bestCost = Infinity
+    for (let i = 1; i < path.length; i++) {
+      const cost = milesBetween(path[i - 1], s) + milesBetween(s, path[i]) - milesBetween(path[i - 1], path[i])
+      if (cost < bestCost) {
+        bestCost = cost
+        best = i
       }
     }
+    path.splice(best, 0, s)
   }
-  return path.slice(1) as T[]
+  return path.slice(1, -1) as T[]
+}
+
+/** How far out of the way a stop is on the drive from `start` to `end` (miles of extra driving). */
+export function detourMiles(start: Point, end: Point, s: Point): number {
+  return milesBetween(start, s) + milesBetween(s, end) - milesBetween(start, end)
 }
 
 /** Rough drive estimate: streets wind ~35% more than a straight line, ~25 mph in neighborhoods. */
-export function routeEstimate(start: Point, stops: Point[]): { miles: number; driveMin: number } {
+export function routeEstimate(start: Point, stops: Point[], end?: Point | null): { miles: number; driveMin: number } {
   let miles = 0
   let here = start
-  for (const s of stops) {
+  for (const s of end ? [...stops, end] : stops) {
     miles += milesBetween(here, s)
     here = s
   }
@@ -88,7 +121,8 @@ export function navUrl(app: NavApp, to: Point | string): string {
 }
 
 /** Google Maps takes up to 9 waypoints in one link; longer routes open in legs. */
-export function googleRouteLegs(start: Point | null, stops: Point[]): string[] {
+export function googleRouteLegs(start: Point | null, stopsOnly: Point[], end?: Point | null): string[] {
+  const stops = end && stopsOnly.length ? [...stopsOnly, end] : stopsOnly
   const legs: string[] = []
   const ll = (p: Point) => `${p.lat},${p.lng}`
   let origin = start

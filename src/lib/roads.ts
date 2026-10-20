@@ -63,14 +63,15 @@ async function call<T>(key: string, kind: 'optimize' | 'directions', body: unkno
 }
 
 /**
- * Best driving order for the stops, starting from `start` (open route, no return).
+ * Best driving order for the stops, starting from `start` and finishing at `end` if given
+ * (otherwise an open route).
  * Returns the stop ids in order, or null to keep the app's own ordering.
  */
-export async function orderByRoads<T extends Point & { id: string }>(key: string, start: Point, stops: T[]): Promise<string[] | null> {
-  if (!key || stops.length < 3 || stops.length > MAX_POINTS) return null
+export async function orderByRoads<T extends Point & { id: string }>(key: string, start: Point, stops: T[], end?: Point | null): Promise<string[] | null> {
+  if (!key || stops.length < 3 || stops.length > MAX_POINTS - (end ? 1 : 0)) return null
   const body = {
     jobs: stops.map((s, i) => ({ id: i + 1, location: [s.lng, s.lat] })),
-    vehicles: [{ id: 1, profile: 'driving-car', start: [start.lng, start.lat] }],
+    vehicles: [{ id: 1, profile: 'driving-car', start: [start.lng, start.lat], ...(end ? { end: [end.lng, end.lat] } : {}) }],
   }
   const { data: res } = await call<{ routes?: { steps: { type: string; job?: number }[] }[]; unassigned?: unknown[] }>(key, 'optimize', body)
   const steps = res?.routes?.[0]?.steps

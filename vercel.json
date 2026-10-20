@@ -1,4 +1,4 @@
 {
-  "functions": { "api/geocode.ts": { "maxDuration": 60 }, "api/geocode-fallback.ts": { "maxDuration": 60 }, "api/roads.ts": { "maxDuration": 30 }, "api/gated.ts": { "maxDuration": 60 } },
+  "functions": { "api/geocode.ts": { "maxDuration": 60 }, "api/geocode-fallback.ts": { "maxDuration": 60 }, "api/roads.ts": { "maxDuration": 30 }, "api/gated.ts": { "maxDuration": 60 }, "api/place.ts": { "maxDuration": 30 } },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }
