@@ -165,7 +165,7 @@ function Field({ store }: { store: Store }) {
       setLocHelp("This browser can't share your location. Open KnockRoute in Safari (iPhone) or Chrome (Android).")
       return
     }
-    flash('Finding you…')
+    if (!locHelp) flash('Finding you…')
     // Ask fresh (a tap lets the phone show its permission prompt again), accepting a rougher fix.
     navigator.geolocation.getCurrentPosition(
       (p) => {
@@ -602,7 +602,7 @@ function Field({ store }: { store: Store }) {
             </div>
             <div style={{ whiteSpace: 'pre-line', fontSize: 15 }}>{locHelp}</div>
             <div className="row">
-              <button className="btn small" onClick={() => { setLocHelp(null); locate() }}>Try again</button>
+              <button className="btn small" onClick={() => { setLocHelp(null); setToast(null); locate() }}>Try again</button>
             </div>
           </div>
         )}
@@ -834,6 +834,15 @@ function Field({ store }: { store: Store }) {
 /** What to fix when the phone won't share its location, by the browser's error code. */
 function locationHelp(code: number): string {
   const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+  // Opened from a text link (a Safari tab) rather than the home-screen icon.
+  const inSafariTab = ios && !(navigator as Navigator & { standalone?: boolean }).standalone && !matchMedia('(display-mode: standalone)').matches
+  if (code === 1 && inSafariTab) {
+    return 'Safari is blocking location for this website:\n' +
+      '1. Tap the page-settings button at the left end of the address bar (knockroute.vercel.app) → Website Settings → Location → Allow.\n' +
+      '2. Settings → Privacy & Security → Location Services → Safari Websites → While Using the App, with Precise Location on.\n' +
+      '3. Reload the page and tap Allow when asked.\n' +
+      'Tip: add KnockRoute to the Home Screen (Share → Add to Home Screen) and open it from there.'
+  }
   if (code === 1) {
     return ios
       ? 'Your iPhone is blocking location for KnockRoute. The home-screen app uses Safari\'s setting:\n' +
