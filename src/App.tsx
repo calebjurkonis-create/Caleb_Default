@@ -137,16 +137,53 @@ function Field({ store }: { store: Store }) {
     return () => mq.removeEventListener('change', on)
   }, [])
 
-  // Follow my location while the app is open.
+  // Follow my location while the app is open. Remember why it failed, so the locate button
+  // can say exactly what to fix (permission off vs. no GPS fix yet).
+  const [locError, setLocError] = useState<number | null>(null)
+  const [locHelp, setLocHelp] = useState<string | null>(null)
+  const [watchKey, setWatchKey] = useState(0)
   useEffect(() => {
     if (!navigator.geolocation) return
     const id = navigator.geolocation.watchPosition(
-      (p) => setHere({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {},
+      (p) => {
+        setHere({ lat: p.coords.latitude, lng: p.coords.longitude })
+        setLocError(null)
+        setLocHelp(null)
+      },
+      (e) => setLocError(e.code),
       { enableHighAccuracy: true, maximumAge: 15_000, timeout: 20_000 },
     )
     return () => navigator.geolocation.clearWatch(id)
-  }, [])
+  }, [watchKey])
+
+  function locate() {
+    if (here) {
+      mapRef.current?.flyTo(here, 16)
+      return
+    }
+    if (!navigator.geolocation) {
+      setLocHelp("This browser can't share your location. Open KnockRoute in Safari (iPhone) or Chrome (Android).")
+      return
+    }
+    flash('Finding you…')
+    // Ask fresh (a tap lets the phone show its permission prompt again), accepting a rougher fix.
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const pt = { lat: p.coords.latitude, lng: p.coords.longitude }
+        setHere(pt)
+        setLocError(null)
+        setLocHelp(null)
+        setWatchKey((k) => k + 1)
+        mapRef.current?.flyTo(pt, 16)
+      },
+      (e) => {
+        setLocError(e.code)
+        setLocHelp(locationHelp(e.code))
+        setWatchKey((k) => k + 1)
+      },
+      { enableHighAccuracy: false, maximumAge: 60_000, timeout: 15_000 },
+    )
+  }
 
   const flash = (msg: string) => {
     setToast(msg)
@@ -549,7 +586,7 @@ function Field({ store }: { store: Store }) {
             <Icon name="lasso" />
             <span className="tool-label">{drawing ? 'Cancel' : 'Draw'}</span>
           </button>
-          <button className="tool" onClick={() => (here ? mapRef.current?.flyTo(here, 16) : flash('Turn on Location for KnockRoute in your phone settings'))} aria-label="Center on my location">
+          <button className="tool" onClick={locate} aria-label="Center on my location" data-loc-error={locError ?? undefined}>
             <Icon name="locate" />
           </button>
           <button className="tool" aria-pressed={satellite} onClick={() => setSatellite(!satellite)} aria-label="Satellite view">
@@ -557,6 +594,18 @@ function Field({ store }: { store: Store }) {
           </button>
         </div>
 
+        {locHelp && (
+          <div className="banner" role="alert">
+            <div className="banner-row">
+              <h3 style={{ flex: 1 }}>Can't get your location</h3>
+              <button className="close" onClick={() => setLocHelp(null)} aria-label="Close"><Icon name="close" /></button>
+            </div>
+            <div style={{ whiteSpace: 'pre-line', fontSize: 15 }}>{locHelp}</div>
+            <div className="row">
+              <button className="btn small" onClick={() => { setLocHelp(null); locate() }}>Try again</button>
+            </div>
+          </div>
+        )}
         {drawing && <div className="draw-hint">{zoneDraw ? 'Drag a loop around the gated neighborhood' : 'Drag a loop around the houses'}</div>}
         {findingGated && <div className="draw-hint">Checking OpenStreetMap for gated areas…</div>}
         {pendingZone && (
@@ -651,7 +700,7 @@ function Field({ store }: { store: Store }) {
           </div>
         )}
 
-        {!drawing && !placingId && !pendingZone && !review && selection.size === 0 && !overlay && tab === 'map' && visible.length > 0 && (
+        {!drawing && !placingId && !pendingZone && !review && !locHelp && selection.size === 0 && !overlay && tab === 'map' && visible.length > 0 && (
           <div className="legend" role="group" aria-label="Show or hide pins by disposition">
             <span className="legend-hint">Tap to show/hide</span>
             {STATUS_ORDER.map((s) => (
@@ -780,4 +829,23 @@ function Field({ store }: { store: Store }) {
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )
+}
+
+/** What to fix when the phone won't share its location, by the browser's error code. */
+function locationHelp(code: number): string {
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+  if (code === 1) {
+    return ios
+      ? 'Your iPhone is blocking location for KnockRoute. The home-screen app uses Safari\'s setting:\n' +
+          '1. Settings → Privacy & Security → Location Services: on.\n' +
+          '2. In that same list, tap Safari Websites → While Using the App, and turn on Precise Location.\n' +
+          '3. Settings → Apps → Safari (older iPhones: Settings → Safari) → Location: Ask or Allow, not Deny.\n' +
+          'Then swipe KnockRoute closed, reopen it, and tap Allow when asked.'
+      : 'Your phone is blocking location for KnockRoute.\n' +
+          '1. Phone Settings → Location: on (and Google Location Accuracy on).\n' +
+          '2. Settings → Apps → Chrome → Permissions → Location: Allow.\n' +
+          '3. In Chrome, open knockroute.vercel.app, tap the icon left of the address → Permissions → Location: Allow.\n' +
+          'Then close KnockRoute, reopen it, and tap Allow when asked.'
+  }
+  return 'Your phone couldn\'t get a location fix yet. Make sure Location is on, step outside or near a window if you can, then tap Try again.'
 }
