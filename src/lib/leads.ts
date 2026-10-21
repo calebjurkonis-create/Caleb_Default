@@ -66,10 +66,15 @@ export function isToday(iso: string, now = new Date()): boolean {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
 }
 
-/** Where Navigate should go: exact coordinates, or the full address when the pin only marks the street. */
-export function navTarget(l: Lead): { lat: number; lng: number } | string {
-  if (l.pinApprox || l.lat == null || l.lng == null) return `${l.address}, ${l.city}, ${l.state} ${l.zip}`
-  return { lat: l.lat, lng: l.lng }
+/**
+ * Where Navigate should go: always the street address, so the maps app finds the house itself.
+ * Map pins come from address ranges and can sit a few houses off; sending the pin's coordinates
+ * made Apple Maps label the trip with whatever house was nearest the pin (the wrong address).
+ */
+export function navTarget(l: Lead): string | { lat: number; lng: number } {
+  const addr = [l.address, l.city, [l.state, l.zip].filter(Boolean).join(' ')].map((x) => x?.trim()).filter(Boolean).join(', ')
+  if (l.address?.trim()) return addr
+  return { lat: l.lat!, lng: l.lng! }
 }
 
 export function houseNumberOf(l: Pick<Lead, 'address'>): string {

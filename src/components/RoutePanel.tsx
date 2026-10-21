@@ -26,6 +26,8 @@ interface Props {
   gatedAt(l: Lead): string | null
   /** Where the route finishes, if anywhere. */
   end: Point | null
+  /** The end point's street address, when it was typed in (not set from a location). */
+  endAddress?: string | null
   /** The "ends at" chooser. */
   endPicker: ReactNode
 }
@@ -36,7 +38,11 @@ export function RoutePanel(p: Props) {
   const next = remaining[0]
   const start = p.me ?? (p.stops[0] ? { lat: p.stops[0].lat!, lng: p.stops[0].lng! } : null)
   const est = start ? routeEstimate(start, remaining as Point[], p.end) : null
-  const legs = googleRouteLegs(p.me, remaining as Point[], p.end)
+  const legs = googleRouteLegs(p.me, remaining as Point[], p.end, (pt) => {
+    if (pt === p.end) return p.endAddress ?? null
+    const t = navTarget(pt as Lead)
+    return typeof t === 'string' ? t : null
+  })
   const gatedLeft = remaining.filter((s) => p.gatedAt(s)).length
 
   return (

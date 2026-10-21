@@ -710,6 +710,7 @@ function Field({ store }: { store: Store }) {
             onRemove={(id) => { const l = byId.get(id); if (l) toggleOnRoute(l) }}
             onReoptimize={() => reoptimize()}
             end={route?.end ?? (route ? null : chosenEnd)}
+            endAddress={(() => { const e = route?.end ?? (route ? null : chosenEnd); return e && !/set from your location/.test(e.label) ? e.label : null })()}
             endPicker={
               <EndPicker
                 places={places}

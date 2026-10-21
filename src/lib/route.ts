@@ -120,11 +120,15 @@ export function navUrl(app: NavApp, to: Point | string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving`
 }
 
-/** Google Maps takes up to 9 waypoints in one link; longer routes open in legs. */
-export function googleRouteLegs(start: Point | null, stopsOnly: Point[], end?: Point | null): string[] {
+/**
+ * Google Maps takes up to 9 waypoints in one link; longer routes open in legs.
+ * `where` gives a stop's street address (preferred, so Google finds the house itself);
+ * stops without one go by coordinates.
+ */
+export function googleRouteLegs(start: Point | null, stopsOnly: Point[], end?: Point | null, where?: (p: Point) => string | null): string[] {
   const stops = end && stopsOnly.length ? [...stopsOnly, end] : stopsOnly
   const legs: string[] = []
-  const ll = (p: Point) => `${p.lat},${p.lng}`
+  const ll = (p: Point) => (p === start ? null : where?.(p)) || `${p.lat},${p.lng}`
   let origin = start
   for (let i = 0; i < stops.length; i += 10) {
     const chunk = stops.slice(i, i + 10)
