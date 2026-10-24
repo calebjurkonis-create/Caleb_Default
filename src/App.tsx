@@ -12,6 +12,7 @@ import { AgendaPanel } from './components/AgendaPanel'
 import { PeekCard } from './components/PeekCard'
 import { EndPicker } from './components/EndPicker'
 import { dueNowCount } from './lib/agenda'
+import { useUpdateAvailable } from './lib/update'
 import { placeNearNeighbors, zipCenters } from './lib/placement'
 import { findGated, zoneAt, zoneLabel, type Suggestion } from './lib/gated'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
@@ -70,6 +71,20 @@ function usePref<T>(key: string, initial: T): [T, (v: T) => void] {
 
 export function App({ store }: { store: Store }) {
   const snap = useSnapshot(store)
+  const updateReady = useUpdateAvailable()
+  return (
+    <>
+      <Screens store={store} snap={snap} />
+      {updateReady && (
+        <button className="update-bar" onClick={() => location.reload()}>
+          New version ready · <b>Tap to update</b>
+        </button>
+      )}
+    </>
+  )
+}
+
+function Screens({ store, snap }: { store: Store; snap: ReturnType<typeof useSnapshot> }) {
   if (!snap.ready) {
     return (
       <main className="login" style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -741,9 +756,9 @@ function Field({ store }: { store: Store }) {
                 {STATUS[s].label}
               </button>
             ))}
-            <button className="legend-item legend-wide" aria-pressed={!hideApprox} onClick={() => setHideApprox(!hideApprox)}>
+            <button className="legend-item" aria-pressed={!hideApprox} onClick={() => setHideApprox(!hideApprox)}>
               <span className="dot approx-dot" aria-hidden="true">A</span>
-              Approximate spot (house is nearby)
+              <span className="legend-two-line">Approximate Pin<small>(house nearby)</small></span>
             </button>
           </div>
         )}

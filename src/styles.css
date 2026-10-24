@@ -401,3 +401,10 @@ input[type='datetime-local'] {
 }
 @media (prefers-color-scheme: dark) { .dot.approx-dot { color: #10202e; } }
 .legend-item[aria-pressed='false'] .dot.approx-dot { background: transparent !important; color: var(--muted); }
+.legend-two-line { display: inline-flex; flex-direction: column; line-height: 1.1; align-items: flex-start; }
+.legend-two-line small { font-size: 10px; color: var(--muted); }
+.update-bar {
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 60px); z-index: 3000;
+  border: 0; border-radius: 99px; padding: 10px 16px; background: var(--route); color: var(--on-route);
+  font: inherit; font-size: 14px; box-shadow: var(--shadow); max-width: calc(100% - 32px); white-space: nowrap;
+}
