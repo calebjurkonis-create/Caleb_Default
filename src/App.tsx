@@ -13,6 +13,7 @@ import { PeekCard } from './components/PeekCard'
 import { EndPicker } from './components/EndPicker'
 import { dueNowCount } from './lib/agenda'
 import { useUpdateAvailable } from './lib/update'
+import { inWindow, monthWindow } from './lib/schedule'
 import { placeNearNeighbors, zipCenters } from './lib/placement'
 import { findGated, zoneAt, zoneLabel, type Suggestion } from './lib/gated'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
@@ -145,6 +146,18 @@ function Field({ store }: { store: Store }) {
   useEffect(() => {
     store.getSetting('ors_key').then(setRoadSetting).catch(() => {})
   }, [store])
+  // Birth-month schedule (on unless a manager turned it off): only the months being worked show.
+  const [scheduleSetting, setScheduleSetting] = useState('')
+  useEffect(() => {
+    store.getSetting('birth_schedule').then(setScheduleSetting).catch(() => {})
+  }, [store])
+  const scheduleOn = scheduleSetting !== 'off'
+  // Re-check the date every hour so the 1st and the 15th roll over without reopening the app.
+  const [today, setToday] = useState(() => new Date().toDateString())
+  useEffect(() => {
+    const t = setInterval(() => setToday(new Date().toDateString()), 60 * 60_000)
+    return () => clearInterval(t)
+  }, [])
   const mapRef = useRef<MapHandle | null>(null)
   const didFit = useRef(false)
 
@@ -210,7 +223,13 @@ function Field({ store }: { store: Store }) {
     window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 2600)
   }
 
-  const visible = useMemo(() => visibleLeads(snap), [snap])
+  const visible = useMemo(() => {
+    const mine = visibleLeads(snap)
+    if (!scheduleOn) return mine
+    const w = monthWindow(new Date())
+    return mine.filter((l) => inWindow(l, w))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap, scheduleOn, today])
 
   // Every lead belongs on the map. Managers' phones put any lead without a pin next to its
   // neighbors (or at its ZIP code) once per session, so the whole team sees it. Dashed pin;
@@ -863,6 +882,11 @@ function Field({ store }: { store: Store }) {
             onDrawZone={startZoneDraw}
             onFindGated={findGatedHere}
             onShowZone={(z) => { setTab('map'); mapRef.current?.fit(z.points.map(([lat, lng]) => ({ lat, lng }))) }}
+            scheduleOn={scheduleOn}
+            onSchedule={async (on) => {
+              await store.setSetting('birth_schedule', on ? '' : 'off')
+              setScheduleSetting(on ? '' : 'off')
+            }}
           />
         )}
         {importing && (

@@ -7,6 +7,7 @@ import { Icon } from './Icon'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 import { buildBackup, lastBackupAt, markBackedUp } from '../lib/backup'
 import { insidePolygon } from '../lib/route'
+import { monthName, monthWindow, scheduleSummary, turning65Index } from '../lib/schedule'
 
 interface Props {
   store: Store
@@ -16,6 +17,8 @@ interface Props {
   onDrawZone(): void
   onFindGated(): void
   onShowZone(z: GatedZone): void
+  scheduleOn: boolean
+  onSchedule(on: boolean): Promise<void>
 }
 
 type SortKey = 'appts' | 'doors' | 'followUps' | 'notInterested' | 'sold' | 'ratio'
@@ -29,7 +32,7 @@ const COLUMNS: { key: SortKey; label: string; title: string }[] = [
   { key: 'ratio', label: '+/−', title: 'Appointments + follow-ups against not interested' },
 ]
 
-export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGated, onShowZone }: Props) {
+export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGated, onShowZone, scheduleOn, onSchedule }: Props) {
   const isManager = snap.me?.role === 'manager'
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>('month')
@@ -253,6 +256,8 @@ export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGa
         {isManager && <GatedAreas store={store} snap={snap} onDraw={onDrawZone} onFind={onFindGated} onShow={onShowZone} />}
 
         {isManager && <DoorsOnRoutes store={store} snap={snap} />}
+
+        {isManager && <BirthSchedule snap={snap} on={scheduleOn} onChange={onSchedule} />}
 
         {isManager && <RemoveByMonth store={store} snap={snap} />}
 
@@ -574,6 +579,74 @@ function GatedAreas({ store, snap, onDraw, onFind, onShow }: { store: Store; sna
           {msg && <div className="err">{msg}</div>}
         </>
       )}
+    </div>
+  )
+}
+
+/** Managers: the automatic birth-month schedule (what's showing, what changes next, on/off). */
+function BirthSchedule({ snap, on, onChange }: { snap: Snapshot; on: boolean; onChange(on: boolean): Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const sum = scheduleSummary()
+  const w = monthWindow()
+  // Uploaded months by turning-65 month, so it's clear what's waiting and what's missing.
+  const months = useMemo(() => {
+    const c = new Map<number, number>()
+    for (const l of snap.leads) {
+      const t = turning65Index(l)
+      if (t != null) c.set(t, (c.get(t) ?? 0) + 1)
+    }
+    return [...c.entries()].sort((a, b) => a[0] - b[0])
+  }, [snap.leads])
+  const missingNext = !months.some(([t]) => t === w.last + 1)
+
+  return (
+    <div className="section">
+      <h3 style={{ fontSize: 20 }}>Birth-month schedule</h3>
+      <div className="muted" style={{ fontSize: 14 }}>
+        Automatic: on the 15th the month 6 out appears; on the 1st the month now 2 out comes off. Nothing is deleted, and leads with an open appointment or follow-up stay on.
+      </div>
+      {on ? (
+        <div className="card" style={{ gap: 6 }}>
+          <div><b>Showing:</b> turning 65 {sum.showing}</div>
+          {sum.next.map((n) => (
+            <div key={n.when} className="muted" style={{ fontSize: 14 }}>{n.when}: {n.what}</div>
+          ))}
+          {missingNext && (
+            <div className="notice">No {monthName(w.last + 1)} leads uploaded yet. Upload them any time before then; they'll appear on schedule.</div>
+          )}
+        </div>
+      ) : (
+        <div className="notice">Off: every uploaded birth month shows on the map.</div>
+      )}
+      <ul className="list">
+        {months.map(([t, n]) => (
+          <li key={t} className="switch">
+            <span>{monthName(t)}</span>
+            <span className="muted num" style={{ fontSize: 14 }}>
+              {n.toLocaleString()} leads · {!on || (t >= w.first && t <= w.last) ? 'on the map' : t < w.first ? 'off (passed)' : 'waiting'}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <button
+        className="btn small"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          setMsg(null)
+          try {
+            await onChange(!on)
+          } catch (e) {
+            setMsg(`Couldn't change it: ${(e as Error).message}`)
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        {on ? 'Turn schedule off (show every month)' : 'Turn schedule back on'}
+      </button>
+      {msg && <div className="err">{msg}</div>}
     </div>
   )
 }
