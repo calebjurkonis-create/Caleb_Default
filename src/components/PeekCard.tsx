@@ -58,7 +58,7 @@ export function PeekCard({ store, snap, lead, onRoute, navApp, onClose, onOpen, 
           {age && <span className={`tag${age.monthsAway <= 2 ? ' warn' : ''}`}>{age.label}</span>}
           {claim && <span className="tag warn">{claim === snap.me?.id ? 'On your route' : `On ${memberName(snap, claim)}'s route`}</span>}
           {zone && <span className="tag gated">Gated · {zoneLabel(zone)}</span>}
-          {hasPoint && lead.pinApprox && <span className="tag warn">Street pin · house #{houseNumberOf(lead) || '?'}</span>}
+          {hasPoint && lead.pinApprox && <span className="tag warn">Approximate pin · house #{houseNumberOf(lead) || '?'}</span>}
         </div>
         <div>
           <HistoryList snap={snap} history={history} limit={3} />

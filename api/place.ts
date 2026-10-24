@@ -53,13 +53,17 @@ async function photon(q: string): Promise<Found | null> {
 
 export async function POST(request: Request): Promise<Response> {
   let q = ''
+  // area: a town or ZIP code rather than a street address (skips the street-only Census lookup).
+  let area = false
   try {
-    q = String((await request.json()).q ?? '').trim().slice(0, 200)
+    const body = await request.json()
+    q = String(body.q ?? '').trim().slice(0, 200)
+    area = body.area === true
   } catch {
     /* handled below */
   }
   if (q.length < 5) return Response.json({ error: 'Type the full address.' }, { status: 400 })
-  const found = (await census(q)) ?? (await nominatim(q)) ?? (await photon(q))
+  const found = area ? ((await photon(q)) ?? (await nominatim(q))) : ((await census(q)) ?? (await nominatim(q)) ?? (await photon(q)))
   if (!found) return Response.json({ error: "Couldn't find that address. Check the spelling and include the city." }, { status: 404 })
   return Response.json(found)
 }

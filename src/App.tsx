@@ -12,6 +12,7 @@ import { AgendaPanel } from './components/AgendaPanel'
 import { PeekCard } from './components/PeekCard'
 import { EndPicker } from './components/EndPicker'
 import { dueNowCount } from './lib/agenda'
+import { placeNearNeighbors, zipCenters } from './lib/placement'
 import { findGated, zoneAt, zoneLabel, type Suggestion } from './lib/gated'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
 import { STATUS, STATUS_ORDER } from './lib/dispositions'
@@ -191,6 +192,32 @@ function Field({ store }: { store: Store }) {
   }
 
   const visible = useMemo(() => visibleLeads(snap), [snap])
+
+  // Every lead belongs on the map. Managers' phones put any lead without a pin next to its
+  // neighbors (or at its ZIP code) once per session, so the whole team sees it. Dashed pin;
+  // Navigate still goes by the address.
+  const placingUnpinned = useRef(false)
+  const unpinnedCount = useMemo(() => snap.leads.filter((l) => l.lat == null || l.lng == null).length, [snap.leads])
+  useEffect(() => {
+    if (!isManager || !unpinnedCount || placingUnpinned.current) return
+    placingUnpinned.current = true
+    ;(async () => {
+      const missing = snap.leads.filter((l) => l.lat == null || l.lng == null)
+      const known = snap.leads
+        .filter((l) => l.lat != null && l.lng != null && !l.pinApprox)
+        .map((l) => ({ address: l.address, zip: l.zip, lat: l.lat!, lng: l.lng! }))
+      const targets = missing.map((l) => ({ id: l.id, address: l.address, zip: l.zip, city: l.city }))
+      const { placed, unplaced } = placeNearNeighbors(targets, known)
+      if (unplaced.length) for (const [id, pos] of await zipCenters(unplaced, missing[0]?.state || 'FL')) placed.set(id, pos)
+      if (!placed.size) return
+      try {
+        await store.updateLeads([...placed].map(([id, pos]) => ({ id, ...pos, pinApprox: true })))
+      } catch {
+        placingUnpinned.current = false // try again next time
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isManager, unpinnedCount > 0, snap.ready])
   const byId = useMemo(() => new Map(visible.map((l) => [l.id, l])), [visible])
   const mapLeads = useMemo(() => visible.filter((l) => !hidden.has(l.status)), [visible, hidden])
   const claimedByOthers = useMemo(

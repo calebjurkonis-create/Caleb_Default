@@ -160,7 +160,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           {lead.attempts > 0 && <span className="tag">{lead.attempts} attempt{lead.attempts === 1 ? '' : 's'}</span>}
           {!hasPoint && <span className="tag warn">Address not found on map</span>}
           {hasPoint && lead.pinApprox && (
-            <span className="tag warn">Pin is on the street · look for house #{houseNumberOf(lead) || '?'}</span>
+            <span className="tag warn">Approximate pin · look for house #{houseNumberOf(lead) || '?'}</span>
           )}
         </div>
 

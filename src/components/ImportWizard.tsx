@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Snapshot, Store } from '../data/store'
-import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
+import { geocodeAll } from '../lib/geocode'
+import { placeNearNeighbors, zipCenters, type KnownPin } from '../lib/placement'
 import { FIELDS, guessMapping, missingRequired, readSheet, splitDuplicates, toLeads, type Mapping, type Sheet } from '../lib/importer'
 import type { NewLead } from '../types'
 import { Icon } from './Icon'
@@ -96,6 +97,10 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
     await holdScreen()
     const p: Progress = { total: fresh.length, saved: 0, onMap: 0, street: 0, notFound: [] }
     setProgress({ ...p })
+    // Exact pins already on the map (plus each batch as it's found) place the misses near their neighbors.
+    const known: KnownPin[] = snap.leads
+      .filter((l) => l.lat != null && l.lng != null && !l.pinApprox)
+      .map((l) => ({ address: l.address, zip: l.zip, lat: l.lat!, lng: l.lng! }))
 
     for (let i = 0; i < fresh.length; i += CHUNK) {
       if (cancel.current) break
@@ -109,23 +114,22 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
             () => {},
           )
           const byId = new Map(found.map((r) => [r.id, r]))
-          const missed = chunk.map((l, j) => ({ l, j })).filter(({ j }) => byId.get(String(j))?.lat == null)
-          if (missed.length) {
-            setStatus(`Second try for ${missed.length} address${missed.length === 1 ? '' : 'es'} the first lookup missed…`)
-            const again = await geocodeFallback(
-              missed.map(({ l, j }) => ({ id: String(j), street: l.address, city: l.city, state: l.state, zip: l.zip })),
-            )
-            for (const r of again) if (r.lat != null) byId.set(r.id, r)
+          for (const [j, l] of chunk.entries()) {
+            const r = byId.get(String(j))
+            if (r?.lat != null && r.lng != null) known.push({ address: l.address, zip: l.zip, lat: r.lat, lng: r.lng })
+          }
+          // Whatever the lookup missed still goes on the map: next to its neighbors, or at its ZIP code.
+          const missed = chunk.map((l, j) => ({ id: String(j), address: l.address, zip: l.zip, city: l.city })).filter((t) => byId.get(t.id)?.lat == null)
+          const { placed, unplaced } = placeNearNeighbors(missed, known)
+          if (unplaced.length) {
+            setStatus(`Placing ${unplaced.length} address${unplaced.length === 1 ? '' : 'es'} by ZIP code…`)
+            for (const [id, pos] of await zipCenters(unplaced, chunk[0]?.state || 'FL')) placed.set(id, pos)
           }
           const located = chunk.map((l, j) => {
             const r = byId.get(String(j))
-            const pos =
-              r?.lat != null && r.lng != null
-                ? r.approx
-                  ? spreadStreetPin(`${l.address}|${l.zip}`, r.lat, r.lng)
-                  : { lat: r.lat, lng: r.lng }
-                : null
-            return { ...l, lat: pos?.lat ?? null, lng: pos?.lng ?? null, pinApprox: !!(pos && r?.approx), assignedTo: assignTo || null }
+            const exact = r?.lat != null && r.lng != null ? { lat: r.lat, lng: r.lng } : null
+            const pos = exact ?? placed.get(String(j)) ?? null
+            return { ...l, lat: pos?.lat ?? null, lng: pos?.lng ?? null, pinApprox: !!pos && !exact, assignedTo: assignTo || null }
           })
           setStatus(`Saving ${i + 1}–${i + chunk.length}…`)
           await store.importList(listName.trim() || fileName, located)
@@ -271,7 +275,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
             )}
             {progress.street > 0 && (
               <div className="muted" style={{ fontSize: 14 }}>
-                {progress.street.toLocaleString()} of those on the map are pinned on their street (likely new builds the map services don't list yet). They show as dashed pins; agents find the house by its number.
+                {progress.street.toLocaleString()} of those on the map have an approximate pin, placed next to their neighbors (usually new builds the address service doesn't list yet). They show as dashed pins; Navigate still goes to the exact address.
               </div>
             )}
             {step === 'done' && progress.notFound.length > 0 && (

@@ -390,7 +390,8 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       return !error && Number(data) >= 2
     },
     async updateLeads(changes) {
-      for (const c of changes) {
+      // A few at a time in parallel, so placing hundreds of pins doesn't crawl.
+      const one = async (c: (typeof changes)[number]) => {
         const row: Row = {}
         if (c.address !== undefined) row.address = c.address
         if (c.city !== undefined) row.city = c.city
@@ -412,7 +413,10 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
           leads.set(c.id, { ...l, ...patch })
         }
       }
-      emitLeads()
+      for (let i = 0; i < changes.length; i += 8) {
+        await Promise.all(changes.slice(i, i + 8).map(one))
+        emitLeads()
+      }
     },
     async deleteList(listId) {
       check(await sb.from('lead_lists').delete().eq('id', listId))

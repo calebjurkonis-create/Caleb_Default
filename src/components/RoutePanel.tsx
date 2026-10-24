@@ -109,7 +109,7 @@ export function RoutePanel(p: Props) {
                   {next.address}
                   <div className="muted">{cityLine(next)}</div>
                 </div>
-                {next.pinApprox && <div className="tag warn" style={{ alignSelf: 'flex-start' }}>Pin is on the street · look for house #{houseNumberOf(next) || '?'}</div>}
+                {next.pinApprox && <div className="tag warn" style={{ alignSelf: 'flex-start' }}>Approximate pin · look for house #{houseNumberOf(next) || '?'}</div>}
                 {p.gatedAt(next) && <div className="tag gated" style={{ alignSelf: 'flex-start' }}>Inside a gated community · {p.gatedAt(next)}</div>}
                 <div className="row">
                   <a className="btn primary" href={navUrl(p.navApp, navTarget(next))} target="_blank" rel="noreferrer">
@@ -155,7 +155,7 @@ export function RoutePanel(p: Props) {
                     <div style={{ minWidth: 0 }}>
                       <button className="lead-row" style={{ padding: 0, display: 'block' }} onClick={() => p.onOpenLead(s)}>
                         <div className="name">{shortName(s)}</div>
-                        <div className="sub">{s.address}, {s.city}{s.pinApprox ? ' · street pin' : ''}{p.gatedAt(s) ? ' · gated' : ''}</div>
+                        <div className="sub">{s.address}, {s.city}{s.pinApprox ? ' · approximate pin' : ''}{p.gatedAt(s) ? ' · gated' : ''}</div>
                       </button>
                       <div className="actions">
                         <span className="status">
