@@ -142,7 +142,7 @@ export function MapView(props: Props) {
     const group = pins.current
     const m = map.current
     if (!group || !m) return
-    renderer.current ??= L.canvas({ padding: 0.5, tolerance: 6, pane: 'pins' })
+    renderer.current ??= new LetterCanvas({ padding: 0.5, tolerance: 6, pane: 'pins' })
     const bounds = m.getBounds().pad(0.3)
     const far = m.getZoom() <= 10
     const colors = new Map<string, string>()
@@ -163,11 +163,15 @@ export function MapView(props: Props) {
         color: ring ? c : focus || sel ? '#10202e' : '#ffffff',
         weight: ring ? (far ? 1.5 : 2.5) : focus ? 4 : sel ? 3 : far ? 1 : 2,
         dashArray: ring ? (far ? '2 2' : '3 3') : undefined,
-        fillColor: c,
-        fillOpacity: ring ? 0.25 : faded ? 0.35 : 1,
+        // Approximate pins: light center with a dashed ring and an "A" in the status color.
+        fillColor: ring && !far ? '#ffffff' : c,
+        fillOpacity: ring ? (far ? 0.25 : faded ? 0.6 : 0.95) : faded ? 0.35 : 1,
+        // "A" marks an approximate spot (the house is nearby; Navigate goes by the address).
+        letter: lead.pinApprox && !far ? 'A' : undefined,
+        letterColor: ring ? c : '#ffffff',
         opacity: faded ? 0.6 : 1,
       }
-      const radius = focus ? 11 : sel ? 9 : far ? 4 : 7
+      const radius = focus ? 11 : sel ? 9 : far ? 4 : lead.pinApprox ? 9 : 7
       const existing = markers.current.get(lead.id)
       if (existing) {
         existing.setStyle(style)
@@ -345,6 +349,27 @@ function Lasso({ map, onDone, color = '#f2b632' }: { map: L.Map; onDone(poly: Po
     </div>
   )
 }
+
+/**
+ * The pins' canvas, plus a small letter inside pins that carry one ("A" = approximate spot).
+ * Drawn in the same pass as the dot, so it costs next to nothing even with thousands of pins.
+ */
+const LetterCanvas = (L.Canvas as unknown as { extend(props: object): new (o: L.RendererOptions) => L.Canvas }).extend({
+  _updateCircle(this: { _drawing: boolean; _ctx: CanvasRenderingContext2D }, layer: L.CircleMarker & { _point: L.Point; _radius: number; _empty(): boolean }) {
+    ;(L.Canvas.prototype as unknown as { _updateCircle(l: unknown): void })._updateCircle.call(this, layer)
+    const o = layer.options as L.CircleMarkerOptions & { letter?: string; letterColor?: string }
+    if (!o.letter || !this._drawing || layer._empty() || layer._radius < 6) return
+    const ctx = this._ctx
+    ctx.save()
+    ctx.font = `700 ${Math.round(layer._radius * 1.4)}px "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.globalAlpha = o.opacity ?? 1
+    ctx.fillStyle = o.letterColor ?? '#10202e'
+    ctx.fillText(o.letter, layer._point.x, layer._point.y + 0.5)
+    ctx.restore()
+  },
+})
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
