@@ -103,6 +103,8 @@ function Field({ store }: { store: Store }) {
   // Dispositions hidden on the map, remembered on this phone. Empty = show everything.
   const [hiddenList, setHiddenList] = usePref<LeadStatus[]>('knockroute-hidden', [])
   const hidden = useMemo(() => new Set(hiddenList), [hiddenList])
+  // Approximate pins (placed near the house, not on it) can be hidden too, from the same key.
+  const [hideApprox, setHideApprox] = usePref('knockroute-hide-approx', false)
   const applyPreset = (f: (typeof FILTERS)[number]) => setHiddenList(STATUS_ORDER.filter((s) => !f.match(s)))
   const presetOn = (f: (typeof FILTERS)[number]) => STATUS_ORDER.every((s) => f.match(s) === !hidden.has(s))
   const toggleStatus = (s: LeadStatus) => setHiddenList(hidden.has(s) ? hiddenList.filter((x) => x !== s) : [...hiddenList, s])
@@ -219,7 +221,10 @@ function Field({ store }: { store: Store }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isManager, unpinnedCount > 0, snap.ready])
   const byId = useMemo(() => new Map(visible.map((l) => [l.id, l])), [visible])
-  const mapLeads = useMemo(() => visible.filter((l) => !hidden.has(l.status)), [visible, hidden])
+  const mapLeads = useMemo(
+    () => visible.filter((l) => !hidden.has(l.status) && !(hideApprox && l.pinApprox)),
+    [visible, hidden, hideApprox],
+  )
   const claimedByOthers = useMemo(
     () => new Set(visible.filter((l) => { const c = activeClaim(l); return c && c !== me.id }).map((l) => l.id)),
     [visible, me.id],
@@ -736,6 +741,10 @@ function Field({ store }: { store: Store }) {
                 {STATUS[s].label}
               </button>
             ))}
+            <button className="legend-item legend-wide" aria-pressed={!hideApprox} onClick={() => setHideApprox(!hideApprox)}>
+              <span className="dot approx-dot" aria-hidden="true">A</span>
+              Approximate spot (house is nearby)
+            </button>
           </div>
         )}
 
