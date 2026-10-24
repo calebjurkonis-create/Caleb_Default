@@ -120,6 +120,8 @@ function Field({ store }: { store: Store }) {
   const hidden = useMemo(() => new Set(hiddenList), [hiddenList])
   // Approximate pins (placed near the house, not on it) can be hidden too, from the same key.
   const [hideApprox, setHideApprox] = usePref('knockroute-hide-approx', false)
+  // The color key can be tucked away to see more map (remembered on this phone).
+  const [keyOpen, setKeyOpen] = usePref('knockroute-key-open', true)
   const applyPreset = (f: (typeof FILTERS)[number]) => setHiddenList(STATUS_ORDER.filter((s) => !f.match(s)))
   const presetOn = (f: (typeof FILTERS)[number]) => STATUS_ORDER.every((s) => f.match(s) === !hidden.has(s))
   const toggleStatus = (s: LeadStatus) => setHiddenList(hidden.has(s) ? hiddenList.filter((x) => x !== s) : [...hiddenList, s])
@@ -748,8 +750,21 @@ function Field({ store }: { store: Store }) {
         )}
 
         {!drawing && !placingId && !pendingZone && !review && !locHelp && selection.size === 0 && !overlay && tab === 'map' && visible.length > 0 && (
+          !keyOpen ? (
+            <button className="legend-tab" onClick={() => setKeyOpen(true)} aria-label="Show the color key">
+              <span className="legend-tab-dots" aria-hidden="true">
+                {STATUS_ORDER.slice(0, 4).map((s) => <span key={s} className="dot" style={{ background: STATUS[s].color }} />)}
+              </span>
+              Key{hiddenList.length + (hideApprox ? 1 : 0) ? ` · ${hiddenList.length + (hideApprox ? 1 : 0)} hidden` : ''}
+            </button>
+          ) : (
           <div className="legend" role="group" aria-label="Show or hide pins by disposition">
-            <span className="legend-hint">Tap to show/hide</span>
+            <div className="legend-head">
+              <span className="legend-hint">Tap to show/hide</span>
+              <button className="legend-close" onClick={() => setKeyOpen(false)} aria-label="Hide the color key">
+                <Icon name="minus" />
+              </button>
+            </div>
             {STATUS_ORDER.map((s) => (
               <button key={s} className="legend-item" aria-pressed={!hidden.has(s)} onClick={() => toggleStatus(s)}>
                 <span className="dot" style={{ background: STATUS[s].color }} />
@@ -761,6 +776,7 @@ function Field({ store }: { store: Store }) {
               <span className="legend-two-line">Approximate Pin<small>(house nearby)</small></span>
             </button>
           </div>
+          )
         )}
 
         {openLead && (

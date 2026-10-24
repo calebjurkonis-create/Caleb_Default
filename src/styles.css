@@ -408,3 +408,20 @@ input[type='datetime-local'] {
   border: 0; border-radius: 99px; padding: 10px 16px; background: var(--route); color: var(--on-route);
   font: inherit; font-size: 14px; box-shadow: var(--shadow); max-width: calc(100% - 32px); white-space: nowrap;
 }
+/* Hide/show the color key */
+.legend-head { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; margin: -2px -4px 0 0; }
+.legend-head .legend-hint { grid-column: auto; }
+.legend-close {
+  width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--ink);
+  display: grid; place-items: center; padding: 0;
+}
+.legend-close svg { width: 16px; height: 16px; }
+.legend-tab {
+  position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; z-index: 900;
+  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px 0 10px; border-radius: 99px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+  font-family: var(--f-display); font-weight: 700; font-size: 14px; letter-spacing: 0.04em;
+}
+.legend-tab-dots { display: inline-flex; }
+.legend-tab-dots .dot { width: 10px; height: 10px; margin-left: -3px; }
+.legend-tab-dots .dot:first-child { margin-left: 0; }
