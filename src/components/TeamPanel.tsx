@@ -261,6 +261,8 @@ export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGa
 
         {isManager && <RemoveByMonth store={store} snap={snap} />}
 
+        {isManager && <RemoveByCounty store={store} snap={snap} />}
+
         {isManager && <Backup store={store} snap={snap} />}
 
         {isManager && store.setRole && (
@@ -647,6 +649,94 @@ function BirthSchedule({ snap, on, onChange }: { snap: Snapshot; on: boolean; on
         {on ? 'Turn schedule off (show every month)' : 'Turn schedule back on'}
       </button>
       {msg && <div className="err">{msg}</div>}
+    </div>
+  )
+}
+
+/** Managers: drop whole counties from KnockRoute (every birth month, including ones waiting their turn). */
+function RemoveByCounty({ store, snap }: { store: Store; snap: Snapshot }) {
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const counties = useMemo(() => {
+    const c = new Map<string, number>()
+    for (const l of snap.leads) {
+      const k = l.county.trim()
+      if (k) c.set(k, (c.get(k) ?? 0) + 1)
+    }
+    return [...c.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [snap.leads])
+  const ids = snap.leads.filter((l) => picked.has(l.county.trim())).map((l) => l.id)
+  const worked = snap.leads.filter((l) => picked.has(l.county.trim()) && l.status !== 'new').length
+  const names = [...picked].sort().join(', ')
+
+  async function remove() {
+    setBusy(true)
+    setMsg(null)
+    try {
+      if (!(await store.canDeleteLeadsSafely())) {
+        setMsg('One-time database update needed first so removing leads keeps their history (supabase/updates/001).')
+        return
+      }
+      await store.deleteLeads(ids)
+      setMsg(`Removed ${ids.length.toLocaleString()} leads from ${names}. Their door-knock history is still in the reports.`)
+      setPicked(new Set())
+    } catch (e) {
+      setMsg(`Couldn't remove them: ${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+      setConfirming(false)
+    }
+  }
+
+  if (!counties.length) return null
+  return (
+    <div className="section">
+      <h3 style={{ fontSize: 20 }}>Remove a county</h3>
+      <div className="muted" style={{ fontSize: 14 }}>
+        Tap the counties you're dropping. Removes every birth month for them, including months waiting for their date. Knocks already logged stay in the leaderboard and exports.
+      </div>
+      <div className="chips" style={{ position: 'static', padding: 0, flexWrap: 'wrap' }} role="group" aria-label="Counties">
+        {counties.map(([name, n]) => (
+          <button
+            key={name}
+            className="chip"
+            aria-pressed={picked.has(name)}
+            onClick={() => {
+              const next = new Set(picked)
+              if (next.has(name)) next.delete(name)
+              else next.add(name)
+              setPicked(next)
+              setConfirming(false)
+              setMsg(null)
+            }}
+          >
+            {name} <span className="num muted">{n.toLocaleString()}</span>
+          </button>
+        ))}
+      </div>
+      {picked.size > 0 &&
+        (confirming ? (
+          <div className="card">
+            <b>Remove {ids.length.toLocaleString()} leads from {names}?</b>
+            <div className="muted" style={{ fontSize: 14 }}>
+              {worked.toLocaleString()} of them have been worked. This can't be undone; re-importing would bring them back as new.
+            </div>
+            <div className="row">
+              <button className="btn danger" disabled={busy} onClick={remove}>
+                {busy ? 'Removing…' : `Remove ${ids.length.toLocaleString()} leads`}
+              </button>
+              <button className="btn" disabled={busy} onClick={() => setConfirming(false)}>Keep them</button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn danger" onClick={() => setConfirming(true)}>
+            Remove {ids.length.toLocaleString()} leads ({picked.size} {picked.size === 1 ? 'county' : 'counties'})…
+          </button>
+        ))}
+      {msg && <div className="muted">{msg}</div>}
     </div>
   )
 }
