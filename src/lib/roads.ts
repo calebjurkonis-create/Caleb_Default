@@ -32,7 +32,21 @@ export interface RoadPath {
   partial?: boolean
 }
 
-type Reply<T> = { data: T | null; status: number }
+type Reply<T> = { data: T | null; status: number; error?: string }
+
+/** Why the last road line couldn't be drawn, in plain words (shown on the Route screen). */
+export let lastRoadProblem: string | null = null
+
+function describe(status: number, error?: string): string {
+  if (status === 0) return 'no connection to the routing service'
+  if (status === 401 || status === 403) return /quota|limit/i.test(error ?? '') ? "the team's daily routing limit is used up (resets overnight)" : 'the routing key was refused'
+  if (status === 429) return 'too many route requests at once (try again in a minute)'
+  if (status >= 500) return 'the routing service is having trouble'
+  return error ? `routing service said: ${error.slice(0, 120)}` : `routing service error ${status}`
+}
+
+/** Snapping stops to far-away roads: dropped for the session if the service won't take it. */
+let snapAnywhere = true
 
 /** Goes through our /api/roads function so the phone never calls OpenRouteService directly. */
 async function call<T>(key: string, kind: 'optimize' | 'directions', body: unknown): Promise<Reply<T>> {
@@ -51,7 +65,17 @@ async function call<T>(key: string, kind: 'optimize' | 'directions', body: unkno
         await new Promise((r) => setTimeout(r, 2500))
         continue
       }
-      if (!res.ok) return { data: null, status: res.status }
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        let error = body
+        try {
+          const j = JSON.parse(body)
+          error = j?.error?.message ?? j?.error ?? j?.message ?? body
+        } catch {
+          /* plain text */
+        }
+        return { data: null, status: res.status, error: typeof error === 'string' ? error : JSON.stringify(error) }
+      }
       return { data: (await res.json()) as T, status: res.status }
     } catch {
       return { data: null, status: 0 }
@@ -102,19 +126,28 @@ function straightLeg(a: Point, b: Point): Leg {
  */
 export async function roadPath(key: string, points: Point[]): Promise<RoadPath | null> {
   if (!key || points.length < 2) return null
+  lastRoadProblem = null
   let requests = 0
   let unavailable = false
 
   async function solve(pts: Point[]): Promise<Leg[]> {
     if (unavailable || requests >= MAX_REQUESTS) return pts.slice(1).map((p, i) => straightLeg(pts[i], p))
     requests++
-    const { data, status } = await call<{
-      features?: { geometry: { coordinates: [number, number][] }; properties: { summary?: { distance?: number; duration?: number } } }[]
-    }>(key, 'directions', {
-      coordinates: pts.map((p) => [p.lng, p.lat]),
-      // Snap each stop to the nearest road however far it is, instead of failing the whole request.
-      radiuses: pts.map(() => -1),
-    })
+    type Dir = { features?: { geometry: { coordinates: [number, number][] }; properties: { summary?: { distance?: number; duration?: number } } }[] }
+    const ask = () =>
+      call<Dir>(key, 'directions', {
+        coordinates: pts.map((p) => [p.lng, p.lat]),
+        // Snap each stop to the nearest road however far it is, instead of failing the whole request.
+        ...(snapAnywhere ? { radiuses: pts.map(() => -1) } : {}),
+      })
+    let { data, status, error } = await ask()
+    // If the service refuses the snapping option itself, stop sending it and ask again.
+    if (!data && status === 400 && snapAnywhere && /radius|radiuses|2003|2004/i.test(error ?? '')) {
+      snapAnywhere = false
+      requests++
+      ;({ data, status, error } = await ask())
+    }
+    if (!data) lastRoadProblem = describe(status, error)
     const f = data?.features?.[0]
     if (f?.geometry?.coordinates?.length) {
       return [{
@@ -125,7 +158,7 @@ export async function roadPath(key: string, points: Point[]): Promise<RoadPath |
       }]
     }
     // Key refused, daily limit used up, or no connection: no point trying smaller pieces.
-    if (status === 0 || status === 401 || status === 403 || status === 429) {
+    if (status === 0 || status === 401 || status === 403 || status === 429 || status >= 500) {
       unavailable = true
       return pts.slice(1).map((p, i) => straightLeg(pts[i], p))
     }
@@ -139,6 +172,7 @@ export async function roadPath(key: string, points: Point[]): Promise<RoadPath |
   // Long routes go in overlapping chunks (the last point of one is the first of the next).
   for (let i = 0; i < points.length - 1; i += MAX_POINTS - 1) legs.push(...(await solve(points.slice(i, i + MAX_POINTS))))
   if (legs.every((l) => l.straight)) return null
+  if (!legs.some((l) => l.straight)) lastRoadProblem = null
   const line: [number, number][] = []
   for (const l of legs) line.push(...(line.length ? l.line.slice(1) : l.line))
   const meters = legs.reduce((t, l) => t + l.meters, 0)

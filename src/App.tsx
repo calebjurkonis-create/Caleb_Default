@@ -19,7 +19,7 @@ import { findGated, zoneAt, zoneLabel, type Suggestion } from './lib/gated'
 import { useSnapshot, visibleLeads, type Store } from './data/store'
 import { STATUS, STATUS_ORDER } from './lib/dispositions'
 import { activeClaim } from './lib/leads'
-import { effectiveRoadKey, orderByRoads, roadPath, type RoadPath } from './lib/roads'
+import { effectiveRoadKey, lastRoadProblem, orderByRoads, roadPath, type RoadPath } from './lib/roads'
 import { detourMiles, insidePolygon, milesBetween, optimizeOrder, type NavApp, type Point } from './lib/route'
 import { endName, endPlace, type EndChoice, type Place, type SavedPlaces } from './lib/places'
 import type { Activity, Lead, LeadStatus, Outcome } from './types'
@@ -445,6 +445,7 @@ function Field({ store }: { store: Store }) {
   const pathSig = route && roadKey ? `${route.start?.lat},${route.start?.lng}|${route.ids.join(',')}|${route.end ? `${route.end.lat},${route.end.lng}` : ''}` : ''
   // If routing is briefly unavailable (no signal, busy service), try again a few times.
   const [pathTry, setPathTry] = useState(0)
+  const [roadProblem, setRoadProblem] = useState<string | null>(null)
   useEffect(() => setPathTry(0), [pathSig])
   useEffect(() => {
     if (!pathSig || !route || route.path?.sig === pathSig) return
@@ -455,6 +456,7 @@ function Field({ store }: { store: Store }) {
     const t = setTimeout(() => {
       roadPath(roadKey, points).then((p) => {
         if (!live) return
+        setRoadProblem(lastRoadProblem)
         if (!p) {
           if (pathTry < 3) retry = setTimeout(() => setPathTry((n) => n + 1), 20_000)
           return
@@ -834,6 +836,7 @@ function Field({ store }: { store: Store }) {
         {!overlay && tab === 'route' && (
           <RoutePanel
             road={roadLine ? { miles: roadLine.miles, minutes: roadLine.minutes, partial: roadLine.partial } : null}
+            roadProblem={roadKey && !roadLine ? roadProblem : null}
             planning={routing}
             stops={routeLeads}
             done={doneStops}

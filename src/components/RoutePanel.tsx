@@ -8,6 +8,8 @@ import { Icon } from './Icon'
 interface Props {
   /** Real driving totals for the whole route when road routing is on. */
   road: { miles: number; minutes: number; partial?: boolean } | null
+  /** Why the route is drawn with straight lines instead of roads, if we know. */
+  roadProblem?: string | null
   /** Waiting on the routing service to order stops. */
   planning: boolean
   stops: Lead[]
@@ -60,6 +62,9 @@ export function RoutePanel(p: Props) {
             </div>
           )}
           {p.planning && <div className="muted" style={{ marginTop: 4 }}>Finding the fastest order by road…</div>}
+          {p.roadProblem && p.stops.length > 0 && (
+            <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>Straight lines for now: {p.roadProblem}. KnockRoute keeps retrying.</div>
+          )}
         </div>
         <button className="close" onClick={p.onClose} aria-label="Close">
           <Icon name="close" />
