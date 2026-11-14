@@ -98,7 +98,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           <h2>{fullName(lead)}</h2>
           <div className="row" style={{ marginTop: 6, gap: 8 }}>
             <span className="status">
-              <span className="dot" style={{ background: STATUS[lead.status].color }} />
+              <span className="dot" style={{ background: lead.leadType === 'nho' && lead.status === 'new' ? 'var(--nho)' : STATUS[lead.status].color }} />
               {STATUS[lead.status].label}
             </span>
             {lead.lastActivityAt && (
