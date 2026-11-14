@@ -86,6 +86,8 @@ export function agentRows(acts: Activity[], members: Member[]): AgentRow[] {
   const doorNeg = new Map<string, number>()
   const bump = (m: Map<string, number>, id: string) => m.set(id, (m.get(id) ?? 0) + 1)
   for (const a of acts) {
+    // The leaderboard is the team's turning-65 work; new-homeowner knocks are kept off it.
+    if (a.leadType === 'nho') continue
     const r = row(a.memberId)
     const atDoor = a.channel !== 'update'
     if (atDoor) r.doors++
@@ -134,7 +136,7 @@ export function dispositionsCsv(acts: Activity[], members: Member[], leads: Map<
   const name = (id: string) => members.find((m) => m.id === id)?.name || 'Former teammate'
   const listName = (id: string | undefined) => lists.find((l) => l.id === id)?.name ?? ''
   return csv([
-    ['Date', 'Time', 'Agent', 'Type', 'Disposition', 'Appointment / follow-up date', 'Notes', 'First name', 'Last name', 'Address', 'City', 'ZIP', 'County', 'Lead list'],
+    ['Date', 'Time', 'Agent', 'Lead type', 'Type', 'Disposition', 'Appointment / follow-up date', 'Notes', 'First name', 'Last name', 'Address', 'City', 'ZIP', 'County', 'Lead list'],
     ...[...acts]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((a) => {
@@ -147,6 +149,7 @@ export function dispositionsCsv(acts: Activity[], members: Member[], leads: Map<
           d.toLocaleDateString('en-US'),
           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           name(a.memberId),
+          a.leadType === 'nho' ? 'New homeowner' : 'Turning 65',
           channelLabel(a),
           STATUS[a.outcome].label,
           a.dueAt ? dueText(a.dueAt) : '',

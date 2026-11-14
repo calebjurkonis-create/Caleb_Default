@@ -7,6 +7,7 @@ import { activeClaim, cityLine, clockTime, formatPhone, fullName, houseNumberOf,
 import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead, Outcome } from '../types'
 import { Icon } from './Icon'
+import { NhoTags, SaleFacts } from './SaleFacts'
 import { geocodeAll, geocodeFallback, spreadStreetPin } from '../lib/geocode'
 import { zoneAt, zoneLabel } from '../lib/gated'
 
@@ -132,9 +133,12 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           )}
         </div>
 
+        <SaleFacts lead={lead} />
+
         <div className="tags">
+          <NhoTags lead={lead} />
           {age && <span className={`tag${age.monthsAway <= 2 ? ' warn' : ''}`}>{age.label}</span>}
-          <span className="tag">{lead.assignedTo ? `Assigned to ${memberName(snap, lead.assignedTo)}` : 'Shared pool'}</span>
+          {lead.leadType !== 'nho' && <span className="tag">{lead.assignedTo ? `Assigned to ${memberName(snap, lead.assignedTo)}` : 'Shared pool'}</span>}
           {claim && <span className="tag warn">{claim === snap.me?.id ? 'On your route today' : `On ${memberName(snap, claim)}'s route today`}</span>}
           {claim && claim !== snap.me?.id && isManager && (
             <button
@@ -221,7 +225,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           </button>
         </div>
 
-        {isManager && (
+        {isManager && lead.leadType !== 'nho' && (
           <label className="field">
             Who works this lead
             <select

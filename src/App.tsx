@@ -121,6 +121,9 @@ function Field({ store }: { store: Store }) {
   const hidden = useMemo(() => new Set(hiddenList), [hiddenList])
   // Approximate pins (placed near the house, not on it) can be hidden too, from the same key.
   const [hideApprox, setHideApprox] = usePref('knockroute-hide-approx', false)
+  // New homeowners (and their LLC/Trust buyers) can be hidden from the map on their own.
+  const [hideNho, setHideNho] = usePref('knockroute-hide-nho', false)
+  const [hideLlc, setHideLlc] = usePref('knockroute-hide-llc', false)
   // The color key can be tucked away to see more map (remembered on this phone).
   const [keyOpen, setKeyOpen] = usePref('knockroute-key-open', true)
   const applyPreset = (f: (typeof FILTERS)[number]) => setHiddenList(STATUS_ORDER.filter((s) => !f.match(s)))
@@ -257,9 +260,17 @@ function Field({ store }: { store: Store }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isManager, unpinnedCount > 0, snap.ready])
   const byId = useMemo(() => new Map(visible.map((l) => [l.id, l])), [visible])
+  const hasNho = useMemo(() => visible.some((l) => l.leadType === 'nho'), [visible])
+  const hiddenCount = hiddenList.length + (hideApprox ? 1 : 0) + (hasNho && hideNho ? 1 : 0) + (hasNho && !hideNho && hideLlc ? 1 : 0)
   const mapLeads = useMemo(
-    () => visible.filter((l) => !hidden.has(l.status) && !(hideApprox && l.pinApprox)),
-    [visible, hidden, hideApprox],
+    () =>
+      visible.filter(
+        (l) =>
+          !hidden.has(l.status) &&
+          !(hideApprox && l.pinApprox) &&
+          !(l.leadType === 'nho' && (hideNho || (hideLlc && l.buyerFlag))),
+      ),
+    [visible, hidden, hideApprox, hideNho, hideLlc],
   )
   const claimedByOthers = useMemo(
     () => new Set(visible.filter((l) => { const c = activeClaim(l); return c && c !== me.id }).map((l) => l.id)),
@@ -758,8 +769,14 @@ function Field({ store }: { store: Store }) {
                 <button
                   className="btn"
                   onClick={async () => {
-                    await store.assign([...selection], assignTo || null)
-                    flash(assignTo ? `${selection.size} leads assigned to ${snap.members.find((m) => m.id === assignTo)?.name}` : `${selection.size} leads back in the shared pool`)
+                    // New homeowners stay with whoever imported them, so agents never get them by accident.
+                    const ids = [...selection].filter((id) => byId.get(id)?.leadType !== 'nho')
+                    await store.assign(ids, assignTo || null)
+                    const kept = selection.size - ids.length
+                    flash(
+                      (assignTo ? `${ids.length} leads assigned to ${snap.members.find((m) => m.id === assignTo)?.name}` : `${ids.length} leads back in the shared pool`) +
+                        (kept ? ` (${kept} new homeowners left as they were)` : ''),
+                    )
                     setSelection(new Set())
                   }}
                 >
@@ -776,7 +793,7 @@ function Field({ store }: { store: Store }) {
               <span className="legend-tab-dots" aria-hidden="true">
                 {STATUS_ORDER.slice(0, 4).map((s) => <span key={s} className="dot" style={{ background: STATUS[s].color }} />)}
               </span>
-              Key{hiddenList.length + (hideApprox ? 1 : 0) ? ` · ${hiddenList.length + (hideApprox ? 1 : 0)} hidden` : ''}
+              Key{hiddenCount ? ` · ${hiddenCount} hidden` : ''}
             </button>
           ) : (
           <div className="legend" role="group" aria-label="Show or hide pins by disposition">
@@ -796,6 +813,18 @@ function Field({ store }: { store: Store }) {
               <span className="dot approx-dot" aria-hidden="true">A</span>
               <span className="legend-two-line">Approximate Pin<small>(house nearby)</small></span>
             </button>
+            {hasNho && (
+              <>
+                <button className="legend-item" aria-pressed={!hideNho} onClick={() => setHideNho(!hideNho)}>
+                  <span className="dot nho-dot" />
+                  New homeowners
+                </button>
+                <button className="legend-item" aria-pressed={!hideLlc && !hideNho} disabled={hideNho} onClick={() => setHideLlc(!hideLlc)}>
+                  <span className="dot llc-dot" />
+                  <span className="legend-two-line">LLC / Trust<small>(likely rentals)</small></span>
+                </button>
+              </>
+            )}
           </div>
           )
         )}

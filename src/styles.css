@@ -425,3 +425,12 @@ input[type='datetime-local'] {
 .legend-tab-dots { display: inline-flex; }
 .legend-tab-dots .dot { width: 10px; height: 10px; margin-left: -3px; }
 .legend-tab-dots .dot:first-child { margin-left: 0; }
+/* New homeowners (mortgage protection leads) */
+:root { --nho: #d01c8b; }
+@media (prefers-color-scheme: dark) { :root { --nho: #ff5cc0; } }
+.tag.nho { border-color: var(--nho); color: var(--nho); font-weight: 600; }
+.dot.nho-dot { background: var(--nho) !important; }
+.dot.llc-dot { background: transparent !important; border: 2px solid var(--nho); }
+.sale-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; }
+.sale-facts dt { color: var(--muted); }
+.sale-facts dd { margin: 0; font-weight: 600; }

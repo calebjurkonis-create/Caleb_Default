@@ -18,14 +18,14 @@ type Sort = 'near' | 'recent' | 'turning'
 
 export function LeadsPanel({ snap, leads, me, onClose, onOpenLead }: Props) {
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState<LeadStatus | 'all' | 'nopin'>('all')
+  const [status, setStatus] = useState<LeadStatus | 'all' | 'nopin' | 'nho'>('all')
   const [sort, setSort] = useState<Sort>(me ? 'near' : 'recent')
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase()
     let r = leads.filter(
       (l) =>
-        (status === 'all' || (status === 'nopin' ? l.lat == null : l.status === status)) &&
+        (status === 'all' || (status === 'nopin' ? l.lat == null : status === 'nho' ? l.leadType === 'nho' : l.status === status)) &&
         (!needle || `${l.firstName} ${l.lastName} ${l.address} ${l.city} ${l.zip}`.toLowerCase().includes(needle)),
     )
     const dist = (l: Lead) => (me && l.lat != null ? milesBetween(me, { lat: l.lat, lng: l.lng! }) : Infinity)
@@ -36,6 +36,7 @@ export function LeadsPanel({ snap, leads, me, onClose, onOpenLead }: Props) {
   }, [leads, q, status, sort, me])
 
   const noPin = useMemo(() => leads.filter((l) => l.lat == null).length, [leads])
+  const nhoCount = useMemo(() => leads.filter((l) => l.leadType === 'nho').length, [leads])
   const counts = useMemo(() => {
     const c: Partial<Record<LeadStatus, number>> = {}
     for (const l of leads) c[l.status] = (c[l.status] ?? 0) + 1
@@ -61,6 +62,12 @@ export function LeadsPanel({ snap, leads, me, onClose, onOpenLead }: Props) {
           <button className="chip" aria-pressed={status === 'all'} onClick={() => setStatus('all')}>
             All
           </button>
+          {nhoCount > 0 && (
+            <button className="chip" aria-pressed={status === 'nho'} onClick={() => setStatus('nho')}>
+              <span className="dot nho-dot" />
+              New homeowners <span className="num muted">{nhoCount}</span>
+            </button>
+          )}
           {noPin > 0 && (
             <button className="chip" aria-pressed={status === 'nopin'} onClick={() => setStatus('nopin')}>
               <span className="dot" style={{ background: 'transparent', border: '1.5px dashed var(--muted)' }} />

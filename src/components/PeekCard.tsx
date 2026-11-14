@@ -6,6 +6,7 @@ import { navUrl, type NavApp } from '../lib/route'
 import type { Activity, Lead } from '../types'
 import { Icon } from './Icon'
 import { HistoryList } from './LeadSheet'
+import { NhoTags, SaleFacts } from './SaleFacts'
 import { zoneAt, zoneLabel } from '../lib/gated'
 
 interface Props {
@@ -49,7 +50,9 @@ export function PeekCard({ store, snap, lead, onRoute, navApp, onClose, onOpen, 
         </button>
       </header>
       <div className="sheet-body" style={{ gap: 12 }}>
+        <SaleFacts lead={lead} compact />
         <div className="tags">
+          <NhoTags lead={lead} />
           <span className="status">
             <span className="dot" style={{ background: STATUS[lead.status].color }} />
             {STATUS[lead.status].label}

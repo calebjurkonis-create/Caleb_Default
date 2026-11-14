@@ -663,13 +663,15 @@ function RemoveByCounty({ store, snap }: { store: Store; snap: Snapshot }) {
   const counties = useMemo(() => {
     const c = new Map<string, number>()
     for (const l of snap.leads) {
+      if (l.leadType === 'nho') continue // county removal is for the turning-65 territory
       const k = l.county.trim()
       if (k) c.set(k, (c.get(k) ?? 0) + 1)
     }
     return [...c.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [snap.leads])
-  const ids = snap.leads.filter((l) => picked.has(l.county.trim())).map((l) => l.id)
-  const worked = snap.leads.filter((l) => picked.has(l.county.trim()) && l.status !== 'new').length
+  const inPicked = (l: (typeof snap.leads)[number]) => l.leadType !== 'nho' && picked.has(l.county.trim())
+  const ids = snap.leads.filter(inPicked).map((l) => l.id)
+  const worked = snap.leads.filter((l) => inPicked(l) && l.status !== 'new').length
   const names = [...picked].sort().join(', ')
 
   async function remove() {

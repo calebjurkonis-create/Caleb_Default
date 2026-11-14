@@ -44,7 +44,7 @@ export async function buildBackup(store: Store, snap: Snapshot): Promise<{ blob:
   const leadById = new Map(snap.leads.map((l) => [l.id, l]))
 
   const leads: Sheet = [
-    head(['List', 'Prefix', 'First name', 'Last name', 'Address', 'City', 'State', 'ZIP', 'County', 'Phone', 'DOB (YYYYMM)', 'Status', 'Attempts', 'Last worked', 'Last worked by', 'Assigned to', 'Latitude', 'Longitude', 'Pin on street only', 'Lead ID']),
+    head(['List', 'Prefix', 'First name', 'Last name', 'Address', 'City', 'State', 'ZIP', 'County', 'Phone', 'DOB (YYYYMM)', 'Status', 'Attempts', 'Last worked', 'Last worked by', 'Assigned to', 'Latitude', 'Longitude', 'Pin on street only', 'Lead ID', 'Lead type', 'Sale date', 'Sale price', 'Homestead', 'LLC/Trust', 'Property type', 'Parcel', 'Source note']),
     ...snap.leads.map((l: Lead) => [
       text(listName.get(l.listId)),
       text(l.prefix),
@@ -66,6 +66,14 @@ export async function buildBackup(store: Store, snap: Snapshot): Promise<{ blob:
       num(l.lng),
       text(l.pinApprox ? 'Yes' : ''),
       text(l.id),
+      text(l.leadType === 'nho' ? 'New homeowner' : 'Turning 65'),
+      text(l.saleDate),
+      num(l.salePrice),
+      text(l.homestead),
+      text(l.buyerFlag),
+      text(l.propertyType),
+      text(l.parcelId),
+      text(l.sourceNote),
     ]),
   ]
 

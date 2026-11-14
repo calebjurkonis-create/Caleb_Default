@@ -146,6 +146,7 @@ export function MapView(props: Props) {
     const bounds = m.getBounds().pad(0.3)
     const far = m.getZoom() <= 10
     const colors = new Map<string, string>()
+    const nhoColor = getComputedStyle(document.documentElement).getPropertyValue('--nho').trim() || '#d01c8b'
     const keep = new Set<string>()
     leadById.current = new Map(props.leads.map((l) => [l.id, l]))
     for (const lead of props.leads) {
@@ -157,18 +158,21 @@ export function MapView(props: Props) {
       const sel = props.selected.has(lead.id)
       const focus = props.focusId === lead.id
       const faded = props.claimedByOthers.has(lead.id)
+      // New homeowners: magenta until visited, then the status color inside a magenta ring.
+      const nho = lead.leadType === 'nho'
+      const fill = nho && lead.status === 'new' ? nhoColor : c
       // Street-level pins: hollow with a dashed ring in the status color.
       const ring = lead.pinApprox && !focus && !sel
       const style = {
-        color: ring ? c : focus || sel ? '#10202e' : '#ffffff',
-        weight: ring ? (far ? 1.5 : 2.5) : focus ? 4 : sel ? 3 : far ? 1 : 2,
+        color: ring ? (nho ? nhoColor : c) : focus || sel ? '#10202e' : nho ? nhoColor : '#ffffff',
+        weight: ring ? (far ? 1.5 : 2.5) : focus ? 4 : sel ? 3 : nho ? (far ? 1.5 : 3) : far ? 1 : 2,
         dashArray: ring ? (far ? '2 2' : '3 3') : undefined,
         // Approximate pins: light center with a dashed ring and an "A" in the status color.
-        fillColor: ring && !far ? '#ffffff' : c,
+        fillColor: ring && !far ? '#ffffff' : fill,
         fillOpacity: ring ? (far ? 0.25 : faded ? 0.6 : 0.95) : faded ? 0.35 : 1,
         // "A" marks an approximate spot (the house is nearby; Navigate goes by the address).
         letter: lead.pinApprox && !far ? 'A' : undefined,
-        letterColor: ring ? c : '#ffffff',
+        letterColor: ring ? (nho ? nhoColor : c) : '#ffffff',
         opacity: faded ? 0.6 : 1,
       }
       const radius = focus ? 11 : sel ? 9 : far ? 4 : lead.pinApprox ? 9 : 7
