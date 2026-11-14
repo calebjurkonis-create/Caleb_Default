@@ -30,6 +30,8 @@ export interface Snapshot {
   zones: GatedZone[]
   /** Gated areas can be saved (database update 005 applied). */
   zonesReady: boolean
+  /** New-homeowner leads can be saved (database update 006 applied). */
+  nhoReady?: boolean
   /** Bumped when a follow-up/appointment is updated, so open agenda lists refresh. */
   itemsVersion?: number
 }

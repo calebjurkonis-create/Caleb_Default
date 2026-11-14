@@ -29,6 +29,14 @@ const toLead = (r: Row): Lead => ({
   assignedTo: r.assigned_to,
   claimedBy: r.claimed_by,
   claimedAt: r.claimed_at,
+  leadType: r.lead_type === 'nho' ? 'nho' : 't65',
+  saleDate: r.sale_date ?? null,
+  salePrice: r.sale_price == null ? null : Number(r.sale_price),
+  homestead: r.homestead ?? null,
+  buyerFlag: r.buyer_flag ?? null,
+  parcelId: r.parcel_id ?? null,
+  propertyType: r.property_type ?? null,
+  sourceNote: r.source_note ?? null,
 })
 
 const toZone = (r: Row): GatedZone => ({
@@ -53,6 +61,7 @@ const toActivity = (r: Row): Activity => ({
   outcome: r.outcome,
   notes: r.notes,
   createdAt: r.created_at,
+  leadType: r.lead_type === 'nho' ? 'nho' : 't65',
 })
 
 const toMember = (r: Row): Member => ({ id: r.id, name: r.name, role: r.role as Role })
@@ -133,6 +142,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         agendaReady: version >= 4,
         canSetDates: version >= 5,
         zonesReady: version >= 6,
+        nhoReady: version >= 7,
         zones,
       })
     } catch (err) {
@@ -343,6 +353,19 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
                   lng: l.lng,
                   ...(approxColumn ? { pin_approx: l.pinApprox } : {}),
                   assigned_to: l.assignedTo,
+                  // New-homeowner fields only exist after update 006; T65 rows don't send them.
+                  ...(l.leadType === 'nho'
+                    ? {
+                        lead_type: 'nho',
+                        sale_date: l.saleDate ?? null,
+                        sale_price: l.salePrice ?? null,
+                        homestead: l.homestead ?? null,
+                        buyer_flag: l.buyerFlag ?? null,
+                        parcel_id: l.parcelId ?? null,
+                        property_type: l.propertyType ?? null,
+                        source_note: l.sourceNote ?? null,
+                      }
+                    : {}),
                 })),
               )
               .select(),

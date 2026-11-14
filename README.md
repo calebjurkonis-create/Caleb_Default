@@ -49,6 +49,7 @@ Run each file in [`supabase/updates/`](supabase/updates/) once, in order, in the
 - `003-app-settings.sql`: shared settings, used for the road-routing key.
 - `004-agenda.sql`: dates on appointments and follow-ups, the Agenda tab, and status updates (Sold, Booked…). Also includes 001.
 - `005-gated-areas.sql`: gated areas managers mark on the map.
+- `006-new-homeowners.sql`: new-homeowner leads (own type, sale details; assigned to one person so agents never see them). Also includes 003.
 
 #### Adding and removing people later
 - **Add:** Authentication → Users → Add user → Create new user (step 4), then set their name and role in the app's Team tab.

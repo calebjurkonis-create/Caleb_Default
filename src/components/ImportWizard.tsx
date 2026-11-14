@@ -4,6 +4,7 @@ import { geocodeAll } from '../lib/geocode'
 import { placeNearNeighbors, zipCenters, type KnownPin } from '../lib/placement'
 import { FIELDS, guessMapping, missingRequired, readSheet, splitDuplicates, toLeads, type Mapping, type Sheet } from '../lib/importer'
 import type { NewLead } from '../types'
+import { readHomeowners, splitHomeownerDuplicates, type HomeownerFile } from '../lib/homeowners'
 import { Icon } from './Icon'
 
 type Step = 'file' | 'setup' | 'running' | 'done'
@@ -30,6 +31,11 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
   const [mapping, setMapping] = useState<Mapping>({})
   const [listName, setListName] = useState('')
   const [assignTo, setAssignTo] = useState('')
+  // Which kind of list: turning-65 leads, or new homeowners (assigned to me: agents never see them).
+  const [kind, setKind] = useState<'t65' | 'nho'>('t65')
+  const [homeowners, setHomeowners] = useState<HomeownerFile | null>(null)
+  const me = snap.me
+  const canNho = !!snap.nhoReady && me?.role === 'manager'
   const [dupes, setDupes] = useState<NewLead[]>([])
   const [progress, setProgress] = useState<Progress>({ total: 0, saved: 0, onMap: 0, street: 0, notFound: [] })
   const [status, setStatus] = useState('')
@@ -65,6 +71,19 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
   async function pick(file: File | undefined) {
     if (!file) return
     setError(null)
+    if (kind === 'nho' && me) {
+      try {
+        const h = await readHomeowners(file, me.id)
+        if (!h.rows.length) throw new Error('no sales rows with an owner and address were found')
+        setHomeowners(h)
+        setFileName(file.name)
+        setListName(`New homeowners – ${new Date().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`)
+        setStep('setup')
+      } catch (e) {
+        setError(`Couldn't read that file: ${(e as Error).message}.`)
+      }
+      return
+    }
     try {
       const s = await readSheet(file)
       if (!s.rows.length) throw new Error('That file has no rows under the header.')
@@ -79,8 +98,10 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
   }
 
   async function run() {
-    if (!sheet) return
-    const { fresh, dupes: skipped } = splitDuplicates(toLeads(sheet, mapping), snap.leads)
+    if (kind === 't65' && !sheet) return
+    if (kind === 'nho' && !homeowners) return
+    const { fresh, dupes: skipped } =
+      kind === 'nho' ? splitHomeownerDuplicates(homeowners!.rows, snap.leads) : splitDuplicates(toLeads(sheet!, mapping), snap.leads)
     setDupes(skipped)
     setError(null)
     if (!fresh.length) {
@@ -129,7 +150,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
             const r = byId.get(String(j))
             const exact = r?.lat != null && r.lng != null ? { lat: r.lat, lng: r.lng } : null
             const pos = exact ?? placed.get(String(j)) ?? null
-            return { ...l, lat: pos?.lat ?? null, lng: pos?.lng ?? null, pinApprox: !!pos && !exact, assignedTo: assignTo || null }
+            return { ...l, lat: pos?.lat ?? null, lng: pos?.lng ?? null, pinApprox: !!pos && !exact, assignedTo: kind === 'nho' ? l.assignedTo : assignTo || null }
           })
           setStatus(`Saving ${i + 1}–${i + chunk.length}…`)
           await store.importList(listName.trim() || fileName, located)
@@ -186,6 +207,17 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
 
         {step === 'file' && (
           <>
+            {canNho && (
+              <div className="seg" role="group" aria-label="Kind of leads">
+                <button aria-pressed={kind === 't65'} onClick={() => setKind('t65')}>Turning 65</button>
+                <button aria-pressed={kind === 'nho'} onClick={() => setKind('nho')}>New homeowners</button>
+              </div>
+            )}
+            {kind === 'nho' && (
+              <div className="notice">
+                New homeowners are assigned to you: agents never see them; managers can. Every ZIP tab is read, LLC/Trust buyers are kept and marked as likely rentals, and addresses you already have are skipped.
+              </div>
+            )}
             <label className="btn route block" style={{ cursor: 'pointer' }}>
               <Icon name="upload" /> Choose .xlsx or .csv
               <input type="file" accept=".xlsx,.csv,.txt" hidden onChange={(e) => pick(e.target.files?.[0])} />
@@ -196,7 +228,32 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
           </>
         )}
 
-        {step === 'setup' && sheet && (
+        {step === 'setup' && kind === 'nho' && homeowners && (
+          <>
+            <div className="card" style={{ gap: 6 }}>
+              <b className="num">{homeowners.rows.length.toLocaleString()} home sales</b>
+              <div className="muted num" style={{ fontSize: 14 }}>
+                {homeowners.tabs.map((t) => `${t.name}: ${t.rows}`).join(' · ')}
+              </div>
+              <div className="muted num" style={{ fontSize: 14 }}>
+                {homeowners.rows.filter((r) => r.buyerFlag).length} LLC/Trust buyers (marked as likely rentals)
+              </div>
+              {homeowners.emptyTabs.length > 0 && (
+                <div className="notice">No sales in: {homeowners.emptyTabs.join(', ')}. Re-pull those and upload again later; nothing doubles up.</div>
+              )}
+            </div>
+            <label className="field">
+              List name
+              <input id="list-name" type="text" value={listName} onChange={(e) => setListName(e.target.value)} />
+            </label>
+            <div className="muted" style={{ fontSize: 14 }}>Assigned to {me?.name ?? 'you'}. Hidden from agents.</div>
+            <button className="btn primary block" disabled={!listName.trim()} onClick={run}>
+              Add to the map <Icon name="arrow" />
+            </button>
+          </>
+        )}
+
+        {step === 'setup' && kind === 't65' && sheet && (
           <>
             <div className="muted num">{sheet.rows.length.toLocaleString()} rows found.</div>
             <details open={missing.length > 0}>

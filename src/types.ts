@@ -50,7 +50,22 @@ export interface Lead {
   /** Set when someone puts the lead on today's route, so others don't plan the same door. */
   claimedBy: string | null
   claimedAt: string | null
+  /** Turning 65 (default) or a new homeowner (recent buyer, pitched mortgage protection). */
+  leadType?: LeadType
+  /** New homeowners: from the county sales record. */
+  saleDate?: string | null
+  salePrice?: number | null
+  /** "Yes", "No" or "Not shown". */
+  homestead?: string | null
+  /** "LLC/Corp" or "Trust" when the buyer isn't a person: likely a rental. */
+  buyerFlag?: string | null
+  parcelId?: string | null
+  propertyType?: string | null
+  /** The source sheet's note, e.g. "New construction" or "Mails out of state (NY)". */
+  sourceNote?: string | null
 }
+
+export type LeadType = 't65' | 'nho'
 
 export interface Activity {
   id: string
@@ -68,6 +83,8 @@ export interface Activity {
   /** Set once the follow-up/appointment has been updated (booked, sold, not interested…). */
   resolvedAt: string | null
   resolution: Outcome | null
+  /** Which kind of lead the visit was on (new-homeowner knocks stay off the team leaderboard). */
+  leadType?: LeadType
 }
 
 export interface LeadList {

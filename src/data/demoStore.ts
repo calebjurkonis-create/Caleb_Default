@@ -67,6 +67,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       error: null,
       zones: data.zones ?? [],
       zonesReady: true,
+      nhoReady: true,
       agendaReady: true,
       canSetDates: true,
       itemsVersion,
@@ -96,6 +97,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
     return l ? `${l.firstName} ${l.lastName}, ${l.address}, ${l.city}` : ''
   }
   const record = (a: Activity) => {
+    a.leadType = data.leads.find((l) => l.id === a.leadId)?.leadType ?? 't65'
     data.activities = [a, ...data.activities]
     data.leads = data.leads.map((l) =>
       l.id === a.leadId
