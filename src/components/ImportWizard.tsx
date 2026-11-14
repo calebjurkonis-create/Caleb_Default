@@ -215,7 +215,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
             )}
             {kind === 'nho' && (
               <div className="notice">
-                New homeowners are assigned to you: agents never see them; managers can. Every ZIP tab is read, LLC/Trust buyers are kept and marked as likely rentals, and addresses you already have are skipped.
+                New homeowners are assigned to you: agents never see them; managers can. Every ZIP tab is read and addresses you already have are skipped.
               </div>
             )}
             <label className="btn route block" style={{ cursor: 'pointer' }}>
@@ -236,7 +236,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
                 {homeowners.tabs.map((t) => `${t.name}: ${t.rows}`).join(' · ')}
               </div>
               <div className="muted num" style={{ fontSize: 14 }}>
-                {homeowners.rows.filter((r) => r.buyerFlag).length} LLC/Trust buyers (marked as likely rentals)
+                {homeowners.rows.filter((r) => r.buyerFlag === 'Trust').length} owned by a trust
               </div>
               {homeowners.emptyTabs.length > 0 && (
                 <div className="notice">No sales in: {homeowners.emptyTabs.join(', ')}. Re-pull those and upload again later; nothing doubles up.</div>

@@ -9,7 +9,7 @@ export function NhoTags({ lead }: { lead: Lead }) {
   return (
     <>
       <span className="tag nho">New homeowner</span>
-      {lead.buyerFlag && <span className="tag warn">Likely rental ({lead.buyerFlag})</span>}
+      {lead.buyerFlag && <span className="tag">{lead.buyerFlag}</span>}
     </>
   )
 }

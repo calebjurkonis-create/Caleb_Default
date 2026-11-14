@@ -123,7 +123,6 @@ function Field({ store }: { store: Store }) {
   const [hideApprox, setHideApprox] = usePref('knockroute-hide-approx', false)
   // New homeowners (and their LLC/Trust buyers) can be hidden from the map on their own.
   const [hideNho, setHideNho] = usePref('knockroute-hide-nho', false)
-  const [hideLlc, setHideLlc] = usePref('knockroute-hide-llc', false)
   // The color key can be tucked away to see more map (remembered on this phone).
   const [keyOpen, setKeyOpen] = usePref('knockroute-key-open', true)
   const applyPreset = (f: (typeof FILTERS)[number]) => setHiddenList(STATUS_ORDER.filter((s) => !f.match(s)))
@@ -261,16 +260,16 @@ function Field({ store }: { store: Store }) {
   }, [isManager, unpinnedCount > 0, snap.ready])
   const byId = useMemo(() => new Map(visible.map((l) => [l.id, l])), [visible])
   const hasNho = useMemo(() => visible.some((l) => l.leadType === 'nho'), [visible])
-  const hiddenCount = hiddenList.length + (hideApprox ? 1 : 0) + (hasNho && hideNho ? 1 : 0) + (hasNho && !hideNho && hideLlc ? 1 : 0)
+  const hiddenCount = hiddenList.length + (hideApprox ? 1 : 0) + (hasNho && hideNho ? 1 : 0)
   const mapLeads = useMemo(
     () =>
       visible.filter(
         (l) =>
           !hidden.has(l.status) &&
           !(hideApprox && l.pinApprox) &&
-          !(l.leadType === 'nho' && (hideNho || (hideLlc && l.buyerFlag))),
+          !(l.leadType === 'nho' && hideNho),
       ),
-    [visible, hidden, hideApprox, hideNho, hideLlc],
+    [visible, hidden, hideApprox, hideNho],
   )
   const claimedByOthers = useMemo(
     () => new Set(visible.filter((l) => { const c = activeClaim(l); return c && c !== me.id }).map((l) => l.id)),
@@ -818,10 +817,6 @@ function Field({ store }: { store: Store }) {
                 <button className="legend-item" aria-pressed={!hideNho} onClick={() => setHideNho(!hideNho)}>
                   <span className="dot nho-dot" />
                   New homeowners
-                </button>
-                <button className="legend-item" aria-pressed={!hideLlc && !hideNho} disabled={hideNho} onClick={() => setHideLlc(!hideLlc)}>
-                  <span className="dot llc-dot" />
-                  <span className="legend-two-line">LLC / Trust<small>(likely rentals)</small></span>
                 </button>
               </>
             )}
