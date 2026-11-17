@@ -66,7 +66,7 @@ export async function buildBackup(store: Store, snap: Snapshot): Promise<{ blob:
       num(l.lng),
       text(l.pinApprox ? 'Yes' : ''),
       text(l.id),
-      text(l.leadType === 'nho' ? 'New homeowner' : 'Turning 65'),
+      text(l.leadType === 'nho' ? 'New homeowner' : l.leadType === 'personal' ? 'Agent’s own lead' : 'Turning 65'),
       text(l.saleDate),
       num(l.salePrice),
       text(l.homestead),

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Activity, GatedZone, Lead, LeadList, LeadStatus, Member, Role } from '../types'
+import type { Activity, GatedZone, Lead, LeadList, LeadStatus, LeadType, Member, Role } from '../types'
 import type { Snapshot, Store } from './store'
 import { DATED } from '../lib/dispositions'
 import { currentItems } from '../lib/agenda'
@@ -29,7 +29,7 @@ const toLead = (r: Row): Lead => ({
   assignedTo: r.assigned_to,
   claimedBy: r.claimed_by,
   claimedAt: r.claimed_at,
-  leadType: r.lead_type === 'nho' ? 'nho' : 't65',
+  leadType: toLeadType(r.lead_type),
   saleDate: r.sale_date ?? null,
   salePrice: r.sale_price == null ? null : Number(r.sale_price),
   homestead: r.homestead ?? null,
@@ -38,6 +38,10 @@ const toLead = (r: Row): Lead => ({
   propertyType: r.property_type ?? null,
   sourceNote: r.source_note ?? null,
 })
+
+function toLeadType(t: unknown): LeadType {
+  return t === 'nho' || t === 'personal' ? t : 't65'
+}
 
 const toZone = (r: Row): GatedZone => ({
   id: r.id,
@@ -61,11 +65,11 @@ const toActivity = (r: Row): Activity => ({
   outcome: r.outcome,
   notes: r.notes,
   createdAt: r.created_at,
-  leadType: r.lead_type === 'nho' ? 'nho' : 't65',
+  leadType: toLeadType(r.lead_type),
 })
 
 const toMember = (r: Row): Member => ({ id: r.id, name: r.name, role: r.role as Role })
-const toList = (r: Row): LeadList => ({ id: r.id, name: r.name, createdAt: r.created_at, createdBy: r.created_by })
+const toList = (r: Row): LeadList => ({ id: r.id, name: r.name, createdAt: r.created_at, createdBy: r.created_by, ownerId: r.owner_id ?? null })
 
 const RECENT_DAYS = 14
 const PAGE = 1000
@@ -143,6 +147,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         canSetDates: version >= 5,
         zonesReady: version >= 6,
         nhoReady: version >= 7,
+        ownLeadsReady: version >= 8,
         zones,
       })
     } catch (err) {
@@ -326,9 +331,15 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
     },
     async importList(name, rows) {
       // Same list name = keep adding to that list (this is how an interrupted import resumes).
-      let list = snapshot.lists.find((l) => l.name.trim().toLowerCase() === name.trim().toLowerCase())
+      // An agent's own leads go in a list that belongs to them (the database only lets them add there).
+      const own = rows.length > 0 && rows.every((l) => l.leadType === 'personal')
+      let list = snapshot.lists.find(
+        (l) => l.name.trim().toLowerCase() === name.trim().toLowerCase() && (!own || l.ownerId === userId),
+      )
       if (!list) {
-        list = toList(check<Row>(await sb.from('lead_lists').insert({ name, created_by: userId }).select().single()))
+        list = toList(
+          check<Row>(await sb.from('lead_lists').insert({ name, created_by: userId, ...(own ? { owner_id: userId } : {}) }).select().single()),
+        )
         emit({ lists: [list, ...snapshot.lists] })
       }
       for (let i = 0; i < rows.length; i += 500) {
@@ -365,7 +376,9 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
                         property_type: l.propertyType ?? null,
                         source_note: l.sourceNote ?? null,
                       }
-                    : {}),
+                    : l.leadType === 'personal'
+                      ? { lead_type: 'personal', assigned_to: userId }
+                      : {}),
                 })),
               )
               .select(),

@@ -31,11 +31,16 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
   const [mapping, setMapping] = useState<Mapping>({})
   const [listName, setListName] = useState('')
   const [assignTo, setAssignTo] = useState('')
-  // Which kind of list: turning-65 leads, or new homeowners (assigned to me: agents never see them).
-  const [kind, setKind] = useState<'t65' | 'nho'>('t65')
-  const [homeowners, setHomeowners] = useState<HomeownerFile | null>(null)
   const me = snap.me
   const canNho = !!snap.nhoReady && me?.role === 'manager'
+  // Agents add their own leads: only they and managers see them.
+  const ownMode = !!snap.ownLeadsReady && !!me && me.role !== 'manager'
+  const ownListName = `${me?.name ?? 'My'}’s own leads`
+  // Which kind of list: turning-65 leads, new homeowners (assigned to me: agents never see them),
+  // or an agent's own leads.
+  const [kind, setKind] = useState<'t65' | 'nho' | 'personal'>(ownMode ? 'personal' : 't65')
+  const [homeowners, setHomeowners] = useState<HomeownerFile | null>(null)
+  const [one, setOne] = useState({ firstName: '', lastName: '', address: '', city: '', zip: '', phone: '' })
   const [dupes, setDupes] = useState<NewLead[]>([])
   const [progress, setProgress] = useState<Progress>({ total: 0, saved: 0, onMap: 0, street: 0, notFound: [] })
   const [status, setStatus] = useState('')
@@ -90,23 +95,32 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
       setSheet(s)
       setMapping(guessMapping(s.headers))
       setFileName(file.name)
-      setListName(file.name.replace(/\.(xlsx|csv|txt)$/i, '').replace(/[_]+/g, ' ').trim())
+      setListName(kind === 'personal' ? ownListName : file.name.replace(/\.(xlsx|csv|txt)$/i, '').replace(/[_]+/g, ' ').trim())
       setStep('setup')
     } catch (e) {
       setError(`Couldn't read that file: ${(e as Error).message}. Use an .xlsx or .csv export with column names in the first row.`)
     }
   }
 
-  async function run() {
-    if (kind === 't65' && !sheet) return
-    if (kind === 'nho' && !homeowners) return
-    const { fresh, dupes: skipped } =
-      kind === 'nho' ? splitHomeownerDuplicates(homeowners!.rows, snap.leads) : splitDuplicates(toLeads(sheet!, mapping), snap.leads)
+  async function run(single?: NewLead) {
+    if (!single && kind !== 'nho' && !sheet) return
+    if (!single && kind === 'nho' && !homeowners) return
+    const { fresh, dupes: skipped } = single
+      ? splitDuplicates([single], snap.leads)
+      : kind === 'nho'
+        ? splitHomeownerDuplicates(homeowners!.rows, snap.leads)
+        : splitDuplicates(toLeads(sheet!, mapping), snap.leads)
+    if (single) {
+      setFileName('')
+      setListName(ownListName)
+    }
     setDupes(skipped)
     setError(null)
     if (!fresh.length) {
       setError(
-        skipped.length
+        single && skipped.length
+          ? 'That person is already in KnockRoute at that address.'
+          : skipped.length
           ? `All ${skipped.length} leads in this file are already in KnockRoute. Nothing new to add.`
           : 'No rows with a name and street address were found.',
       )
@@ -150,10 +164,18 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
             const r = byId.get(String(j))
             const exact = r?.lat != null && r.lng != null ? { lat: r.lat, lng: r.lng } : null
             const pos = exact ?? placed.get(String(j)) ?? null
-            return { ...l, lat: pos?.lat ?? null, lng: pos?.lng ?? null, pinApprox: !!pos && !exact, assignedTo: kind === 'nho' ? l.assignedTo : assignTo || null }
+            const owner = kind === 'nho' ? l.assignedTo : kind === 'personal' ? me?.id ?? null : assignTo || null
+            return {
+              ...l,
+              lat: pos?.lat ?? null,
+              lng: pos?.lng ?? null,
+              pinApprox: !!pos && !exact,
+              assignedTo: owner,
+              ...(kind === 'personal' ? { leadType: 'personal' as const } : {}),
+            }
           })
           setStatus(`Saving ${i + 1}–${i + chunk.length}…`)
-          await store.importList(listName.trim() || fileName, located)
+          await store.importList(kind === 'personal' ? ownListName : listName.trim() || fileName, located)
           p.saved += located.length
           p.onMap += located.filter((l) => l.lat != null).length
           p.street += located.filter((l) => l.pinApprox).length
@@ -182,13 +204,17 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
   }
 
   const missing = missingRequired(mapping)
+  const doneMsg =
+    kind === 'personal'
+      ? `Added ${progress.saved.toLocaleString()} lead${progress.saved === 1 ? '' : 's'} to your own leads`
+      : `Imported ${progress.saved.toLocaleString()} leads`
   const pct = progress.total ? Math.round((progress.saved / progress.total) * 100) : 0
 
   return (
     <section className="sheet full" aria-label="Import leads">
       <header className="sheet-head">
         <div className="grow">
-          <h2>Import leads</h2>
+          <h2>{kind === 'personal' ? 'Add your own leads' : 'Import leads'}</h2>
           <div className="muted" style={{ marginTop: 4 }}>
             {step === 'file' && 'Step 1 of 3 · Choose the file'}
             {step === 'setup' && `Step 2 of 3 · Check ${fileName}`}
@@ -197,7 +223,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
           </div>
         </div>
         {step !== 'running' && (
-          <button className="close" onClick={() => (step === 'done' && !stopped ? onDone(`Imported ${progress.saved.toLocaleString()} leads`) : onClose())} aria-label="Close">
+          <button className="close" onClick={() => (step === 'done' && !stopped ? onDone(doneMsg) : onClose())} aria-label="Close">
             <Icon name="close" />
           </button>
         )}
@@ -205,7 +231,63 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
       <div className="sheet-body">
         {error && <div className="err">{error}</div>}
 
-        {step === 'file' && (
+        {step === 'file' && kind === 'personal' && (
+          <>
+            <div className="notice">Only you and your managers see the leads you add. Knocks on them count on the leaderboard.</div>
+            <form
+              className="card own-form"
+              style={{ gap: 8 }}
+              onSubmit={(e) => {
+                e.preventDefault()
+                const t = (v: string) => v.trim()
+                run({
+                  prefix: '',
+                  firstName: t(one.firstName),
+                  lastName: t(one.lastName),
+                  address: t(one.address),
+                  city: t(one.city),
+                  state: 'FL',
+                  zip: t(one.zip).slice(0, 5),
+                  county: '',
+                  phone: t(one.phone),
+                  dob: '',
+                  lat: null,
+                  lng: null,
+                  pinApprox: false,
+                  assignedTo: me?.id ?? null,
+                  leadType: 'personal',
+                })
+              }}
+            >
+              <b>Add one person</b>
+              <div className="row" style={{ gap: 8 }}>
+                <input id="own-first" type="text" placeholder="First name" autoComplete="off" value={one.firstName} onChange={(e) => setOne({ ...one, firstName: e.target.value })} />
+                <input id="own-last" type="text" placeholder="Last name" autoComplete="off" value={one.lastName} onChange={(e) => setOne({ ...one, lastName: e.target.value })} />
+              </div>
+              <input id="own-address" type="text" placeholder="Street address" autoComplete="off" value={one.address} onChange={(e) => setOne({ ...one, address: e.target.value })} />
+              <div className="row" style={{ gap: 8 }}>
+                <input id="own-city" type="text" placeholder="City" autoComplete="off" value={one.city} onChange={(e) => setOne({ ...one, city: e.target.value })} />
+                <input id="own-zip" type="text" inputMode="numeric" placeholder="ZIP" autoComplete="off" value={one.zip} onChange={(e) => setOne({ ...one, zip: e.target.value })} style={{ maxWidth: 110 }} />
+              </div>
+              <input id="own-phone" type="tel" placeholder="Phone (optional)" autoComplete="off" value={one.phone} onChange={(e) => setOne({ ...one, phone: e.target.value })} />
+              <button
+                className="btn primary block"
+                type="submit"
+                disabled={!(one.firstName.trim() || one.lastName.trim()) || !one.address.trim() || !(one.city.trim() || one.zip.trim())}
+              >
+                Add to the map <Icon name="arrow" />
+              </button>
+            </form>
+            <div className="muted" style={{ textAlign: 'center' }}>or add a whole list</div>
+            <label className="btn route block" style={{ cursor: 'pointer' }}>
+              <Icon name="upload" /> Choose .xlsx or .csv
+              <input type="file" accept=".xlsx,.csv,.txt" hidden onChange={(e) => pick(e.target.files?.[0])} />
+            </label>
+            <div className="notice">Needs columns for first name, last name, street address and city. People already in KnockRoute are skipped.</div>
+          </>
+        )}
+
+        {step === 'file' && kind !== 'personal' && (
           <>
             {canNho && (
               <div className="seg" role="group" aria-label="Kind of leads">
@@ -247,13 +329,13 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
               <input id="list-name" type="text" value={listName} onChange={(e) => setListName(e.target.value)} />
             </label>
             <div className="muted" style={{ fontSize: 14 }}>Assigned to {me?.name ?? 'you'}. Hidden from agents.</div>
-            <button className="btn primary block" disabled={!listName.trim()} onClick={run}>
+            <button className="btn primary block" disabled={!listName.trim()} onClick={() => run()}>
               Add to the map <Icon name="arrow" />
             </button>
           </>
         )}
 
-        {step === 'setup' && kind === 't65' && sheet && (
+        {step === 'setup' && kind !== 'nho' && sheet && (
           <>
             <div className="muted num">{sheet.rows.length.toLocaleString()} rows found.</div>
             <details open={missing.length > 0}>
@@ -286,6 +368,10 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
               </table>
             </details>
             {missing.length > 0 && <div className="err">Still needed: {missing.join(', ')}</div>}
+            {kind === 'personal' ? (
+              <div className="muted" style={{ fontSize: 14 }}>Saved to your own leads. Only you and your managers see them.</div>
+            ) : (
+            <>
             <label className="field">
               List name
               <input id="list-name" type="text" value={listName} onChange={(e) => setListName(e.target.value)} />
@@ -299,12 +385,14 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
                 ))}
               </select>
             </label>
+            </>
+            )}
             {sheet.rows.length > 1000 && (
               <div className="notice">
                 Big list: this takes a while. Keep KnockRoute open on screen until it finishes. If it gets interrupted, everything saved so far stays, and choosing the same file again picks up where it stopped.
               </div>
             )}
-            <button className="btn primary block" disabled={missing.length > 0 || !listName.trim()} onClick={run}>
+            <button className="btn primary block" disabled={missing.length > 0 || !listName.trim()} onClick={() => run()}>
               Add to the map <Icon name="arrow" />
             </button>
           </>
@@ -353,7 +441,7 @@ export function ImportWizard({ store, snap, onClose, onDone }: { store: Store; s
               </label>
             )}
             {step === 'done' && !stopped && (
-              <button className="btn primary block" onClick={() => onDone(`Imported ${progress.saved.toLocaleString()} leads`)}>
+              <button className="btn primary block" onClick={() => onDone(doneMsg)}>
                 See them on the map
               </button>
             )}

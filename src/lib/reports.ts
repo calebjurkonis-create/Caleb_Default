@@ -149,7 +149,7 @@ export function dispositionsCsv(acts: Activity[], members: Member[], leads: Map<
           d.toLocaleDateString('en-US'),
           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           name(a.memberId),
-          a.leadType === 'nho' ? 'New homeowner' : 'Turning 65',
+          a.leadType === 'nho' ? 'New homeowner' : a.leadType === 'personal' ? 'Agent’s own lead' : 'Turning 65',
           channelLabel(a),
           STATUS[a.outcome].label,
           a.dueAt ? dueText(a.dueAt) : '',

@@ -35,6 +35,7 @@ export function monthWindow(now = new Date()): { first: number; last: number } {
 const KEEP_STATUSES = new Set(['appointment', 'follow_up'])
 
 export function inWindow(l: Lead, w: { first: number; last: number }): boolean {
+  if (l.leadType === 'personal') return true // agents' own leads aren't on the birth-month schedule
   const t = turning65Index(l)
   if (t == null) return true
   if (KEEP_STATUSES.has(l.status)) return true

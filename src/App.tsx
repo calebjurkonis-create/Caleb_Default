@@ -123,6 +123,7 @@ function Field({ store }: { store: Store }) {
   const [hideApprox, setHideApprox] = usePref('knockroute-hide-approx', false)
   // New homeowners (and their LLC/Trust buyers) can be hidden from the map on their own.
   const [hideNho, setHideNho] = usePref('knockroute-hide-nho', false)
+  const [hideOwn, setHideOwn] = usePref('knockroute-hide-own', false)
   // The color key can be tucked away to see more map (remembered on this phone).
   const [keyOpen, setKeyOpen] = usePref('knockroute-key-open', true)
   const applyPreset = (f: (typeof FILTERS)[number]) => setHiddenList(STATUS_ORDER.filter((s) => !f.match(s)))
@@ -260,16 +261,18 @@ function Field({ store }: { store: Store }) {
   }, [isManager, unpinnedCount > 0, snap.ready])
   const byId = useMemo(() => new Map(visible.map((l) => [l.id, l])), [visible])
   const hasNho = useMemo(() => visible.some((l) => l.leadType === 'nho'), [visible])
-  const hiddenCount = hiddenList.length + (hideApprox ? 1 : 0) + (hasNho && hideNho ? 1 : 0)
+  const hasOwn = useMemo(() => visible.some((l) => l.leadType === 'personal'), [visible])
+  const hiddenCount = hiddenList.length + (hideApprox ? 1 : 0) + (hasNho && hideNho ? 1 : 0) + (hasOwn && hideOwn ? 1 : 0)
   const mapLeads = useMemo(
     () =>
       visible.filter(
         (l) =>
           !hidden.has(l.status) &&
           !(hideApprox && l.pinApprox) &&
-          !(l.leadType === 'nho' && hideNho),
+          !(l.leadType === 'nho' && hideNho) &&
+          !(l.leadType === 'personal' && hideOwn),
       ),
-    [visible, hidden, hideApprox, hideNho],
+    [visible, hidden, hideApprox, hideNho, hideOwn],
   )
   const claimedByOthers = useMemo(
     () => new Set(visible.filter((l) => { const c = activeClaim(l); return c && c !== me.id }).map((l) => l.id)),
@@ -720,8 +723,19 @@ function Field({ store }: { store: Store }) {
           <div className="banner">
             <h3>No leads on the map yet</h3>
             <div className="muted">
-              {isManager ? 'Add a list: Team → Import a spreadsheet (.xlsx or .csv).' : 'Your manager will add a lead list. Check back soon.'}
+              {isManager
+                ? 'Add a list: Team → Import a spreadsheet (.xlsx or .csv).'
+                : snap.ownLeadsReady
+                  ? 'Your manager will add a lead list. You can also add your own leads.'
+                  : 'Your manager will add a lead list. Check back soon.'}
             </div>
+            {!isManager && snap.ownLeadsReady && (
+              <div className="row">
+                <button className="btn route" onClick={() => setImporting(true)}>
+                  <Icon name="plus" /> Add your own leads
+                </button>
+              </div>
+            )}
             {isManager && (
               <div className="row">
                 <button className="btn route" onClick={() => { setTab('team'); setImporting(true) }}>
@@ -768,13 +782,17 @@ function Field({ store }: { store: Store }) {
                 <button
                   className="btn"
                   onClick={async () => {
-                    // New homeowners stay with whoever imported them, so agents never get them by accident.
-                    const ids = [...selection].filter((id) => byId.get(id)?.leadType !== 'nho')
+                    // New homeowners stay with whoever imported them, so agents never get them by accident;
+                    // agents' own leads stay theirs.
+                    const ids = [...selection].filter((id) => {
+                      const t = byId.get(id)?.leadType
+                      return t !== 'nho' && t !== 'personal'
+                    })
                     await store.assign(ids, assignTo || null)
                     const kept = selection.size - ids.length
                     flash(
                       (assignTo ? `${ids.length} leads assigned to ${snap.members.find((m) => m.id === assignTo)?.name}` : `${ids.length} leads back in the shared pool`) +
-                        (kept ? ` (${kept} new homeowners left as they were)` : ''),
+                        (kept ? ` (${kept} new-homeowner or agents’ own leads left as they were)` : ''),
                     )
                     setSelection(new Set())
                   }}
@@ -819,6 +837,12 @@ function Field({ store }: { store: Store }) {
                   New homeowners
                 </button>
               </>
+            )}
+            {hasOwn && (
+              <button className="legend-item" aria-pressed={!hideOwn} onClick={() => setHideOwn(!hideOwn)}>
+                <span className="dot own-dot" />
+                {isManager ? 'Agents’ own leads' : 'Your own leads'}
+              </button>
             )}
           </div>
           )

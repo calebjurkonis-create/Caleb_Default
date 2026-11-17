@@ -54,7 +54,7 @@ export function PeekCard({ store, snap, lead, onRoute, navApp, onClose, onOpen, 
         <div className="tags">
           <NhoTags lead={lead} />
           <span className="status">
-            <span className="dot" style={{ background: lead.leadType === 'nho' && lead.status === 'new' ? 'var(--nho)' : STATUS[lead.status].color }} />
+            <span className="dot" style={{ background: lead.status === 'new' && lead.leadType === 'nho' ? 'var(--nho)' : lead.status === 'new' && lead.leadType === 'personal' ? 'var(--own)' : STATUS[lead.status].color }} />
             {STATUS[lead.status].label}
           </span>
           {lead.lastActivityAt && <span className="tag">{memberName(snap, lead.lastActivityBy)} · {timeAgo(lead.lastActivityAt)}</span>}

@@ -68,6 +68,7 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       zones: data.zones ?? [],
       zonesReady: true,
       nhoReady: true,
+      ownLeadsReady: true,
       agendaReady: true,
       canSetDates: true,
       itemsVersion,

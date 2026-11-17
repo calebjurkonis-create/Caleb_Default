@@ -32,6 +32,8 @@ export interface Snapshot {
   zonesReady: boolean
   /** New-homeowner leads can be saved (database update 006 applied). */
   nhoReady?: boolean
+  /** Database update 7 is in: agents can add their own leads. */
+  ownLeadsReady?: boolean
   /** Bumped when a follow-up/appointment is updated, so open agenda lists refresh. */
   itemsVersion?: number
 }

@@ -65,7 +65,7 @@ export interface Lead {
   sourceNote?: string | null
 }
 
-export type LeadType = 't65' | 'nho'
+export type LeadType = 't65' | 'nho' | 'personal'
 
 export interface Activity {
   id: string
@@ -92,6 +92,8 @@ export interface LeadList {
   name: string
   createdAt: string
   createdBy: string
+  /** Set on an agent's own-leads list; only they and managers see it. */
+  ownerId?: string | null
 }
 
 export type NewLead = Omit<

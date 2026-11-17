@@ -53,6 +53,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
   const age = turning65(lead.dob)
   const claim = activeClaim(lead)
   const isManager = snap.me?.role === 'manager'
+  const ownLead = lead.leadType === 'personal' && lead.assignedTo === snap.me?.id
   const hasPoint = lead.lat != null && lead.lng != null
   const zone = hasPoint ? zoneAt({ lat: lead.lat!, lng: lead.lng! }, snap.zones) : null
 
@@ -98,7 +99,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           <h2>{fullName(lead)}</h2>
           <div className="row" style={{ marginTop: 6, gap: 8 }}>
             <span className="status">
-              <span className="dot" style={{ background: lead.leadType === 'nho' && lead.status === 'new' ? 'var(--nho)' : STATUS[lead.status].color }} />
+              <span className="dot" style={{ background: lead.status === 'new' && lead.leadType === 'nho' ? 'var(--nho)' : lead.status === 'new' && lead.leadType === 'personal' ? 'var(--own)' : STATUS[lead.status].color }} />
               {STATUS[lead.status].label}
             </span>
             {lead.lastActivityAt && (
@@ -138,7 +139,11 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
         <div className="tags">
           <NhoTags lead={lead} />
           {age && <span className={`tag${age.monthsAway <= 2 ? ' warn' : ''}`}>{age.label}</span>}
-          {lead.leadType !== 'nho' && <span className="tag">{lead.assignedTo ? `Assigned to ${memberName(snap, lead.assignedTo)}` : 'Shared pool'}</span>}
+          {lead.leadType === 'personal' ? (
+            <span className="tag own">{ownLead ? 'Your own lead' : `${memberName(snap, lead.assignedTo)}’s own lead`}</span>
+          ) : (
+            lead.leadType !== 'nho' && <span className="tag">{lead.assignedTo ? `Assigned to ${memberName(snap, lead.assignedTo)}` : 'Shared pool'}</span>
+          )}
           {claim && <span className="tag warn">{claim === snap.me?.id ? 'On your route today' : `On ${memberName(snap, claim)}'s route today`}</span>}
           {claim && claim !== snap.me?.id && isManager && (
             <button
@@ -225,7 +230,7 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           </button>
         </div>
 
-        {isManager && lead.leadType !== 'nho' && (
+        {isManager && lead.leadType !== 'nho' && lead.leadType !== 'personal' && (
           <label className="field">
             Who works this lead
             <select
@@ -243,7 +248,9 @@ export function LeadSheet({ store, snap, lead, onRoute, navApp, onClose, onToggl
           </label>
         )}
 
-        {isManager && <PinTools store={store} lead={lead} onPlacePin={onPlacePin} />}
+        {(isManager || ownLead) && <PinTools store={store} lead={lead} onPlacePin={onPlacePin} />}
+
+        {lead.leadType === 'personal' && (ownLead || isManager) && <RemoveOwnLead store={store} lead={lead} onRemoved={onClose} />}
 
         <div className="section">
           <h3 style={{ fontSize: 20 }}>History</h3>
@@ -408,5 +415,45 @@ export function HistoryList({ snap, history, limit }: { snap: Snapshot; history:
       </ol>
       {limit && history.length > limit && <div className="muted" style={{ fontSize: 13 }}>{history.length - limit} older…</div>}
     </>
+  )
+}
+
+/** Agents' own leads: the agent (or a manager) can take one off the map. Knocks stay in the reports. */
+function RemoveOwnLead({ store, lead, onRemoved }: { store: Store; lead: Lead; onRemoved(): void }) {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  if (!confirming)
+    return (
+      <button className="btn small" style={{ alignSelf: 'flex-start' }} onClick={() => setConfirming(true)}>
+        Remove this lead…
+      </button>
+    )
+  return (
+    <div className="card">
+      <b>Remove {fullName(lead)} from your own leads?</b>
+      <div className="muted" style={{ fontSize: 14 }}>Knocks already logged stay on the leaderboard.</div>
+      {err && <div className="err">{err}</div>}
+      <div className="row">
+        <button
+          className="btn danger"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true)
+            setErr(null)
+            try {
+              await store.deleteLeads([lead.id])
+              onRemoved()
+            } catch (e) {
+              setErr(`Couldn't remove it: ${(e as Error).message}`)
+              setBusy(false)
+            }
+          }}
+        >
+          {busy ? 'Removing…' : 'Remove'}
+        </button>
+        <button className="btn" disabled={busy} onClick={() => setConfirming(false)}>Keep it</button>
+      </div>
+    </div>
   )
 }

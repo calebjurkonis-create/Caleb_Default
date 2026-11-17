@@ -210,6 +210,22 @@ export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGa
           {exportMsg && <div className="muted" style={{ fontSize: 14 }}>{exportMsg}</div>}
         </div>
 
+        {!isManager && snap.ownLeadsReady && (
+          <div className="section">
+            <h3 style={{ fontSize: 20 }}>Your own leads</h3>
+            <div className="muted" style={{ fontSize: 14 }}>
+              {(() => {
+                const n = snap.leads.filter((l) => l.leadType === 'personal' && l.assignedTo === snap.me?.id).length
+                return n ? `${n} on the map (teal-green pins). ` : ''
+              })()}
+              Only you and your managers see them. Knocks on them count on the leaderboard.
+            </div>
+            <button className="btn route block" onClick={onImport}>
+              <Icon name="plus" /> Add your own leads
+            </button>
+          </div>
+        )}
+
         {isManager && (
           <div className="section">
             <h3 style={{ fontSize: 20 }}>Lead lists</h3>
@@ -314,22 +330,24 @@ function RemoveByMonth({ store, snap }: { store: Store; snap: Snapshot }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
+  // Turning-65 leads only: new homeowners and agents' own leads aren't on the birth-month schedule.
+  const t65 = useMemo(() => snap.leads.filter((l) => (l.leadType ?? 't65') === 't65'), [snap.leads])
   const months = useMemo(() => {
     const c = new Map<string, number>()
-    for (const l of snap.leads) {
+    for (const l of t65) {
       const ym = /^(\d{4})(\d{2})/.exec(l.dob)
       if (ym) c.set(`${ym[1]}${ym[2]}`, (c.get(`${ym[1]}${ym[2]}`) ?? 0) + 1)
     }
     return [...c.entries()].sort(([a], [b]) => a.localeCompare(b))
-  }, [snap.leads])
+  }, [t65])
 
   const label = (ym: string) => {
     const y = Number(ym.slice(0, 4))
     const m = Number(ym.slice(4, 6)) - 1
     return `Born ${MONTHS[m]} ${y} (turn 65 ${MONTHS[m]} ${y + 65})`
   }
-  const ids = month ? snap.leads.filter((l) => l.dob.startsWith(month)).map((l) => l.id) : []
-  const worked = month ? snap.leads.filter((l) => l.dob.startsWith(month) && l.status !== 'new').length : 0
+  const ids = month ? t65.filter((l) => l.dob.startsWith(month)).map((l) => l.id) : []
+  const worked = month ? t65.filter((l) => l.dob.startsWith(month) && l.status !== 'new').length : 0
 
   async function remove() {
     setBusy(true)
@@ -663,13 +681,13 @@ function RemoveByCounty({ store, snap }: { store: Store; snap: Snapshot }) {
   const counties = useMemo(() => {
     const c = new Map<string, number>()
     for (const l of snap.leads) {
-      if (l.leadType === 'nho') continue // county removal is for the turning-65 territory
+      if ((l.leadType ?? 't65') !== 't65') continue // county removal is for the turning-65 territory
       const k = l.county.trim()
       if (k) c.set(k, (c.get(k) ?? 0) + 1)
     }
     return [...c.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [snap.leads])
-  const inPicked = (l: (typeof snap.leads)[number]) => l.leadType !== 'nho' && picked.has(l.county.trim())
+  const inPicked = (l: (typeof snap.leads)[number]) => (l.leadType ?? 't65') === 't65' && picked.has(l.county.trim())
   const ids = snap.leads.filter(inPicked).map((l) => l.id)
   const worked = snap.leads.filter((l) => inPicked(l) && l.status !== 'new').length
   const names = [...picked].sort().join(', ')
