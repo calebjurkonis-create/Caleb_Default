@@ -270,6 +270,22 @@ export function createDemoStore(opts: DemoOptions = {}): Store {
       data.activities = data.activities.map((a) => (gone.has(a.leadId) ? { ...a, leadId: '' } : a))
       commit()
     },
+    async seenNotices() {
+      try {
+        return JSON.parse(localStorage.getItem(`knockroute-demo-seen-${data.meId}`) ?? '[]') as string[]
+      } catch {
+        return []
+      }
+    },
+    async markNoticeSeen(notice) {
+      try {
+        const k = `knockroute-demo-seen-${data.meId}`
+        const cur = JSON.parse(localStorage.getItem(k) ?? '[]') as string[]
+        localStorage.setItem(k, JSON.stringify([...new Set([...cur, notice])]))
+      } catch {
+        /* ignore */
+      }
+    },
     async getSetting(name) {
       try {
         return localStorage.getItem(`knockroute-demo-setting-${name}`) ?? ''

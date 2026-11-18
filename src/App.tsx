@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImportWizard } from './components/ImportWizard'
+import { WhatsNew, WHATS_NEW_ID } from './components/WhatsNew'
 import { Icon, Logo, type IconName } from './components/Icon'
 import { LeadSheet } from './components/LeadSheet'
 import { LeadsPanel } from './components/LeadsPanel'
@@ -130,6 +131,23 @@ function Field({ store }: { store: Store }) {
   const presetOn = (f: (typeof FILTERS)[number]) => STATUS_ORDER.every((s) => f.match(s) === !hidden.has(s))
   const toggleStatus = (s: LeadStatus) => setHiddenList(hidden.has(s) ? hiddenList.filter((x) => x !== s) : [...hiddenList, s])
   const [importing, setImporting] = useState(false)
+  // One-time "What's new" announcement, once per person (saved to their account).
+  const [whatsNew, setWhatsNew] = useState(false)
+  useEffect(() => {
+    if (!snap.ready || !snap.me) return
+    let live = true
+    store
+      .seenNotices()
+      .then((seen) => live && setWhatsNew(!seen.includes(WHATS_NEW_ID)))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [store, snap.ready, snap.me?.id])
+  const closeWhatsNew = () => {
+    setWhatsNew(false)
+    store.markNoticeSeen(WHATS_NEW_ID).catch(() => {})
+  }
   const [toast, setToast] = useState<string | null>(null)
   const [here, setHere] = useState<Point | null>(null)
   const [route, setRoute] = usePref<SavedRoute | null>(`knockroute-route-${me.id}`, null)
@@ -919,6 +937,7 @@ function Field({ store }: { store: Store }) {
             snap={snap}
             items={items}
             error={itemsError}
+            navApp={navApp}
             onClose={() => setTab('map')}
             onOpenLead={openFromList}
             onUpdated={flash}
@@ -937,6 +956,29 @@ function Field({ store }: { store: Store }) {
             onSchedule={async (on) => {
               await store.setSetting('birth_schedule', on ? '' : 'off')
               setScheduleSetting(on ? '' : 'off')
+            }}
+          />
+        )}
+        {whatsNew && !importing && (
+          <WhatsNew
+            isManager={isManager}
+            gatedCount={snap.zones.filter((z) => z.status === 'active').length}
+            onClose={closeWhatsNew}
+            onShowGated={() => {
+              closeWhatsNew()
+              setTab('map')
+              // Zoom to the gated area nearest to where they are (or the first one).
+              const zones = snap.zones.filter((z) => z.status === 'active' && z.points.length)
+              const center = (z: (typeof zones)[number]) => ({
+                lat: z.points.reduce((t, p) => t + p[0], 0) / z.points.length,
+                lng: z.points.reduce((t, p) => t + p[1], 0) / z.points.length,
+              })
+              const pick = here ? [...zones].sort((a, b) => milesBetween(here, center(a)) - milesBetween(here, center(b)))[0] : zones[0]
+              if (pick) window.setTimeout(() => mapRef.current?.fit(pick.points.map(([lat, lng]) => ({ lat, lng }))), 50)
+            }}
+            onAddLead={() => {
+              closeWhatsNew()
+              setImporting(true)
             }}
           />
         )}

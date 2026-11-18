@@ -105,7 +105,6 @@ export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGa
     return r.sort((a, b) => val(b) - val(a) || b.appts - a.appts || b.doors - a.doors || a.name.localeCompare(b.name))
   }, [acts, snap.members, sortKey])
 
-  const totals = rows.reduce((t, r) => ({ doors: t.doors + r.doors, appts: t.appts + r.appts, followUps: t.followUps + r.followUps }), { doors: 0, appts: 0, followUps: 0 })
 
   async function exportCsv(kind: 'board' | 'all') {
     if (!acts) return
@@ -131,103 +130,106 @@ export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGa
     return c
   }, [snap.leads])
 
-  return (
-    <section className="sheet full" aria-label="Team">
-      <header className="sheet-head">
-        <div className="grow">
-          <h2>Team</h2>
-          <div className="muted" style={{ marginTop: 4 }}>{range.label}</div>
-        </div>
-        <button className="close" onClick={onClose} aria-label="Close">
-          <Icon name="close" />
-        </button>
-      </header>
-      <div className="sheet-body">
-        <div className="chips" style={{ position: 'static', padding: 0 }} role="group" aria-label="Time period">
-          {PERIODS.map((p) => (
-            <button key={p.key} className="chip" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
-              {p.label}
-            </button>
+  const myId = snap.me?.id
+  const active = rows.filter((r) => r.doors || r.sold)
+  const idle = rows.filter((r) => !r.doors && !r.sold)
+  const myIndex = active.findIndex((r) => r.id === myId)
+  const meRow = rows.find((r) => r.id === myId)
+  const top = active.slice(0, 5)
+  const [showAll, setShowAll] = useState(false)
+  const [showKey, setShowKey] = useState(false)
+  const [pane, setPane] = useState<'board' | 'manage'>('board')
+  const [exportOpen, setExportOpen] = useState(false)
+  const SORT_WORD: Record<SortKey, string> = { appts: 'appts', doors: 'doors', followUps: 'follow-ups', notInterested: 'NI', sold: 'sales', ratio: 'points' }
+  const gap =
+    myIndex > 0 && meRow
+      ? (() => {
+          const ahead = active[myIndex - 1]
+          const d = sortKey === 'ratio' ? 0 : (ahead[sortKey] as number) - (meRow[sortKey] as number)
+          return d > 0 ? `${d} ${SORT_WORD[sortKey]} behind #${myIndex}` : `Tied with #${myIndex}`
+        })()
+      : myIndex === 0
+        ? 'Leading the team'
+        : 'No doors yet this period'
+
+  const periodPick = (
+    <select id="team-period" className="pill-select" value={period} onChange={(e) => setPeriod(e.target.value as Period)} aria-label="Time period">
+      {PERIODS.map((p) => (
+        <option key={p.key} value={p.key}>{p.label}</option>
+      ))}
+    </select>
+  )
+  const legend = (
+    <div className="muted" style={{ fontSize: 13 }}>
+      Tap a column to rank by it. DKs = doors knocked · F/U = follow-ups · NI = not interested · Sold = appointments updated to Sold · +/− = appointments + follow-ups : not interested (only doors that were answered). Appt, F/U and NI include status updates on earlier leads.
+    </div>
+  )
+  const fullTable = (list: AgentRow[], rankFrom = 0) => (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="board">
+        <thead>
+          <tr>
+            <th>Agent</th>
+            {COLUMNS.map((c) => (
+              <th key={c.key}>
+                <button className={`sort${sortKey === c.key ? ' on' : ''}`} onClick={() => setSortKey(c.key)} aria-pressed={sortKey === c.key} title={c.title}>
+                  {c.label}
+                </button>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((r, i) => (
+            <tr key={r.id} className={`${r.id === myId ? 'me' : ''}${r.doors === 0 && r.sold === 0 ? ' idle' : ''}`}>
+              <td><span className="rank">{r.doors || r.sold ? rankFrom + i + 1 : ''}</span>{r.id === myId ? 'You' : r.name}</td>
+              <td>{r.doors}</td>
+              <td>{r.appts}</td>
+              <td>{r.followUps}</td>
+              <td>{r.notInterested}</td>
+              <td>{r.sold}</td>
+              <td className="ratio">{ratioLabel(r)}</td>
+            </tr>
           ))}
-        </div>
-
-        <div className="stats">
-          <div className="stat"><b>{acts ? totals.doors : '–'}</b><span>Doors knocked</span></div>
-          <div className="stat"><b>{acts ? totals.appts : '–'}</b><span>Appointments</span></div>
-          <div className="stat"><b>{acts ? totals.followUps : '–'}</b><span>Follow-ups</span></div>
-        </div>
-
-        <div className="section">
-          <h3 style={{ fontSize: 20 }}>Leaderboard</h3>
-          {loadError ? (
-            <div className="err">Couldn't load this period: {loadError}</div>
-          ) : !acts ? (
-            <div className="muted">Loading…</div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="board">
-                <thead>
-                  <tr>
-                    <th>Agent</th>
-                    {COLUMNS.map((c) => (
-                      <th key={c.key}>
-                        <button className={`sort${sortKey === c.key ? ' on' : ''}`} onClick={() => setSortKey(c.key)} aria-pressed={sortKey === c.key} title={c.title}>
-                          {c.label}
-                        </button>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={r.id} className={`${r.id === snap.me?.id ? 'me' : ''}${r.doors === 0 && r.sold === 0 ? ' idle' : ''}`}>
-                      <td><span className="rank">{r.doors || r.sold ? i + 1 : ''}</span>{r.id === snap.me?.id ? 'You' : r.name}</td>
-                      <td>{r.doors}</td>
-                      <td>{r.appts}</td>
-                      <td>{r.followUps}</td>
-                      <td>{r.notInterested}</td>
-                      <td>{r.sold}</td>
-                      <td className="ratio">{ratioLabel(r)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <div className="muted" style={{ fontSize: 13 }}>
-            Tap a column to rank by it. DKs = doors knocked · F/U = follow-ups · NI = not interested · Sold = appointments updated to Sold · +/− = appointments + follow-ups : not interested (only doors that were answered). Appt, F/U and NI include status updates on earlier leads.
-          </div>
-          {isManager && acts && (
-            <div className="row">
-              <button className="btn small" onClick={() => exportCsv('board')} disabled={!acts.length}>
-                <Icon name="download" /> Export leaderboard
-              </button>
-              <button className="btn small" onClick={() => exportCsv('all')} disabled={!acts.length}>
-                <Icon name="download" /> Export every disposition
-              </button>
-            </div>
-          )}
-          {exportMsg && <div className="muted" style={{ fontSize: 14 }}>{exportMsg}</div>}
-        </div>
-
-        {!isManager && snap.ownLeadsReady && (
-          <div className="section">
-            <h3 style={{ fontSize: 20 }}>Your own leads</h3>
-            <div className="muted" style={{ fontSize: 14 }}>
-              {(() => {
-                const n = snap.leads.filter((l) => l.leadType === 'personal' && l.assignedTo === snap.me?.id).length
-                return n ? `${n} on the map (teal-green pins). ` : ''
-              })()}
-              Only you and your managers see them. Knocks on them count on the leaderboard.
-            </div>
-            <button className="btn route block" onClick={onImport}>
-              <Icon name="plus" /> Add your own leads
-            </button>
-          </div>
+        </tbody>
+      </table>
+    </div>
+  )
+  const topTable = (
+    <table className="board">
+      <thead>
+        <tr><th>Top 5</th><th>Doors</th><th>Appts</th><th>F/U</th><th>Sold</th></tr>
+      </thead>
+      <tbody>
+        {top.map((r, i) => (
+          <tr key={r.id} className={r.id === myId ? 'me' : ''}>
+            <td><span className="rank">{i + 1}</span>{r.id === myId ? 'You' : r.name}</td>
+            <td>{r.doors}</td><td>{r.appts}</td><td>{r.followUps}</td><td>{r.sold}</td>
+          </tr>
+        ))}
+        {meRow && myIndex >= 5 && (
+          <tr className="me gap-above">
+            <td><span className="rank">{myIndex + 1}</span>You</td>
+            <td>{meRow.doors}</td><td>{meRow.appts}</td><td>{meRow.followUps}</td><td>{meRow.sold}</td>
+          </tr>
         )}
+      </tbody>
+    </table>
+  )
+  const boardBody = loadError ? (
+    <div className="err">Couldn't load this period: {loadError}</div>
+  ) : !acts ? (
+    <div className="muted">Loading…</div>
+  ) : null
 
-        {isManager && (
-          <div className="section">
+  const zonesActive = snap.zones.filter((z) => z.status === 'active').length
+  const claimed = snap.leads.filter((l) => activeClaim(l))
+  const routesOut = new Set(claimed.map((l) => activeClaim(l))).size
+  const w = monthWindow(new Date())
+  const backedUp = lastBackupAt()
+  const manage: { key: string; title: string; sub: string; body: React.ReactNode }[] = [
+    { key: 'lists', title: 'Lead lists', sub: `${snap.lists.length} list${snap.lists.length === 1 ? '' : 's'} · ${snap.leads.length.toLocaleString()} leads`, body: (
+      <div className="section">
             <h3 style={{ fontSize: 20 }}>Lead lists</h3>
             <button className="btn route block" onClick={onImport}>
               <Icon name="upload" /> Import a spreadsheet
@@ -267,22 +269,14 @@ export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGa
               To give leads to one agent: on the map, tap <b>Draw</b>, circle the area, then tap <b>Assign</b>. Assigned leads disappear from everyone else's map. Assign back to “Shared pool” to open them up again.
             </div>
           </div>
-        )}
-
-        {isManager && <GatedAreas store={store} snap={snap} onDraw={onDrawZone} onFind={onFindGated} onShow={onShowZone} />}
-
-        {isManager && <DoorsOnRoutes store={store} snap={snap} />}
-
-        {isManager && <BirthSchedule snap={snap} on={scheduleOn} onChange={onSchedule} />}
-
-        {isManager && <RemoveByMonth store={store} snap={snap} />}
-
-        {isManager && <RemoveByCounty store={store} snap={snap} />}
-
-        {isManager && <Backup store={store} snap={snap} />}
-
-        {isManager && store.setRole && (
-          <div className="section">
+    ) },
+    { key: 'zones', title: 'Gated areas', sub: `${zonesActive} area${zonesActive === 1 ? '' : 's'}`, body: <GatedAreas store={store} snap={snap} onDraw={onDrawZone} onFind={onFindGated} onShow={onShowZone} /> },
+    { key: 'routes', title: 'Doors on routes now', sub: claimed.length ? `${claimed.length} doors on ${routesOut} route${routesOut === 1 ? '' : 's'}` : 'Nobody out right now', body: <DoorsOnRoutes store={store} snap={snap} /> },
+    { key: 'schedule', title: 'Birth-month schedule', sub: scheduleOn ? `On · showing ${monthName(w.first).replace(/ \d+$/, '')} – ${monthName(w.last)}` : 'Off · every month showing', body: <BirthSchedule snap={snap} on={scheduleOn} onChange={onSchedule} /> },
+    { key: 'remove', title: 'Remove leads', sub: 'By birth month or by county', body: (<><RemoveByMonth store={store} snap={snap} /><RemoveByCounty store={store} snap={snap} /></>) },
+    { key: 'backup', title: 'Backup', sub: backedUp ? `Last saved ${timeAgo(backedUp.toISOString())}` : 'Never saved on this phone', body: <Backup store={store} snap={snap} /> },
+    ...(store.setRole ? [{ key: 'members', title: 'Team members', sub: `${snap.members.length} people`, body: (
+      <div className="section">
             <h3 style={{ fontSize: 20 }}>Team members</h3>
             <div className="muted" style={{ fontSize: 14 }}>
               Fix a name by typing over it. To add or remove someone, see “Adding and removing people” in the setup guide.
@@ -315,6 +309,123 @@ export function TeamPanel({ store, snap, onClose, onImport, onDrawZone, onFindGa
               ))}
             </ul>
           </div>
+    ) }] : []),
+  ]
+  const [openTools, setOpenTools] = useState<Set<string>>(new Set())
+  const toggleTool = (k: string) =>
+    setOpenTools((s) => {
+      const n = new Set(s)
+      if (n.has(k)) n.delete(k)
+      else n.add(k)
+      return n
+    })
+  const ownCount = snap.leads.filter((l) => l.leadType === 'personal' && l.assignedTo === myId).length
+
+  return (
+    <section className="sheet full" aria-label="Team">
+      <header className="sheet-head">
+        <div className="grow">
+          <h2>Team</h2>
+          <div className="muted num" style={{ marginTop: 4 }}>
+            {isManager ? `${snap.members.length} people · ${snap.leads.length.toLocaleString()} leads` : 'How you and the team are doing'}
+          </div>
+        </div>
+        <button className="close" onClick={onClose} aria-label="Close">
+          <Icon name="close" />
+        </button>
+      </header>
+      <div className="sheet-body" style={{ gap: 12 }}>
+        {!isManager ? (
+          <>
+            <div className="pick-line">
+              {periodPick}
+              <button className="link-btn" onClick={() => setShowKey(!showKey)}>What do these mean?</button>
+            </div>
+            {showKey && legend}
+            {boardBody ?? (
+              <>
+                <div className="you-card">
+                  <div className="you-top">
+                    <b>You{myIndex >= 0 ? ` · #${myIndex + 1} of ${rows.length}` : ''}</b>
+                    <small>{gap}</small>
+                  </div>
+                  <div className="you-stats num">
+                    <div><b>{meRow?.doors ?? 0}</b><span>Doors</span></div>
+                    <div><b>{meRow?.appts ?? 0}</b><span>Appts</span></div>
+                    <div><b>{meRow?.followUps ?? 0}</b><span>Follow-ups</span></div>
+                    <div><b>{meRow ? ratioLabel(meRow) : '–'}</b><span>+ / −</span></div>
+                  </div>
+                </div>
+                {showAll ? fullTable(rows) : topTable}
+                <button className="link-btn more-btn" onClick={() => setShowAll(!showAll)}>
+                  {showAll ? 'Show top 5' : `See all ${rows.length}`}
+                </button>
+              </>
+            )}
+            {snap.ownLeadsReady && (
+              <div className="tool-row">
+                <div>
+                  <b>Your own leads</b>
+                  <small>{ownCount ? `${ownCount} on the map · ` : ''}only you and managers see them</small>
+                </div>
+                <button className="btn small route" onClick={onImport}>
+                  <Icon name="plus" /> Add
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="seg" role="group" aria-label="Team view">
+              <button aria-pressed={pane === 'board'} onClick={() => setPane('board')}>Leaderboard</button>
+              <button aria-pressed={pane === 'manage'} onClick={() => setPane('manage')}>Manage</button>
+            </div>
+            {pane === 'board' ? (
+              <>
+                <div className="pick-line">
+                  {periodPick}
+                  <button className="btn small" onClick={() => setExportOpen(!exportOpen)} disabled={!acts?.length} aria-expanded={exportOpen}>
+                    <Icon name="download" /> Export
+                  </button>
+                </div>
+                {exportOpen && acts && (
+                  <div className="row">
+                    <button className="btn small" onClick={() => exportCsv('board')}>Leaderboard</button>
+                    <button className="btn small" onClick={() => exportCsv('all')}>Every disposition</button>
+                  </div>
+                )}
+                {exportMsg && <div className="muted" style={{ fontSize: 14 }}>{exportMsg}</div>}
+                {boardBody ?? (
+                  <>
+                    {fullTable(active)}
+                    {idle.length > 0 && (
+                      <div className={`fold${openTools.has('idle') ? ' open' : ''}`}>
+                        <button className="fold-head" onClick={() => toggleTool('idle')} aria-expanded={openTools.has('idle')}>
+                          <b>No doors yet · <span className="num">{idle.length}</span></b>
+                          <span className="fold-chev" aria-hidden="true">›</span>
+                          <small>{idle.map((r) => r.name).slice(0, 6).join(', ')}{idle.length > 6 ? '…' : ''}</small>
+                        </button>
+                        {openTools.has('idle') && <div className="fold-inner">{fullTable(idle, active.length)}</div>}
+                      </div>
+                    )}
+                    <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShowKey(!showKey)}>What do these mean?</button>
+                    {showKey && legend}
+                  </>
+                )}
+              </>
+            ) : (
+              manage.map((t) => (
+                <div key={t.key} className={`fold tool-fold t-${t.key}${openTools.has(t.key) ? ' open' : ''}`}>
+                  <button className="fold-head" onClick={() => toggleTool(t.key)} aria-expanded={openTools.has(t.key)}>
+                    <b>{t.title}</b>
+                    <span className="fold-chev" aria-hidden="true">›</span>
+                    <small>{t.sub}</small>
+                  </button>
+                  {openTools.has(t.key) && <div className="fold-inner">{t.body}</div>}
+                </div>
+              ))
+            )}
+          </>
         )}
       </div>
     </section>

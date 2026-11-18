@@ -71,6 +71,22 @@ const toActivity = (r: Row): Activity => ({
 const toMember = (r: Row): Member => ({ id: r.id, name: r.name, role: r.role as Role })
 const toList = (r: Row): LeadList => ({ id: r.id, name: r.name, createdAt: r.created_at, createdBy: r.created_by, ownerId: r.owner_id ?? null })
 
+const noticeKey = (who: string | null) => `knockroute-seen-${who ?? 'anon'}`
+function readLocalNotices(who: string | null): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(noticeKey(who)) ?? '[]') as string[]
+  } catch {
+    return []
+  }
+}
+function writeLocalNotice(who: string | null, notice: string) {
+  try {
+    localStorage.setItem(noticeKey(who), JSON.stringify([...new Set([...readLocalNotices(who), notice])]))
+  } catch {
+    /* private mode: the account copy still counts */
+  }
+}
+
 const RECENT_DAYS = 14
 const PAGE = 1000
 
@@ -148,6 +164,7 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         zonesReady: version >= 6,
         nhoReady: version >= 7,
         ownLeadsReady: version >= 8,
+        noticesReady: version >= 9,
         zones,
       })
     } catch (err) {
@@ -405,6 +422,17 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         leads: [...leads.values()],
         activities: snapshot.activities.map((a) => (gone.has(a.leadId) ? { ...a, leadId: '' } : a)),
       })
+    },
+    async seenNotices() {
+      const local = readLocalNotices(userId)
+      if (!snapshot.noticesReady) return local
+      const { data, error } = await sb.from('seen_notices').select('notice')
+      return error ? local : [...new Set([...local, ...(data ?? []).map((r: Row) => r.notice as string)])]
+    },
+    async markNoticeSeen(notice) {
+      writeLocalNotice(userId, notice) // also remembered on this phone, in case the save fails
+      if (!snapshot.noticesReady) return
+      await sb.from('seen_notices').upsert({ member_id: userId, notice }, { onConflict: 'member_id,notice', ignoreDuplicates: true })
     },
     async getSetting(name) {
       const { data, error } = await sb.from('app_settings').select('value').eq('name', name).maybeSingle()
