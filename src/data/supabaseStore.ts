@@ -83,7 +83,7 @@ function writeLocalNotice(who: string | null, notice: string) {
   try {
     localStorage.setItem(noticeKey(who), JSON.stringify([...new Set([...readLocalNotices(who), notice])]))
   } catch {
-    /* private mode: the account copy still counts */
+    /* private mode: it just shows again next time */
   }
 }
 
@@ -164,7 +164,6 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
         zonesReady: version >= 6,
         nhoReady: version >= 7,
         ownLeadsReady: version >= 8,
-        noticesReady: version >= 9,
         zones,
       })
     } catch (err) {
@@ -424,15 +423,10 @@ export function createSupabaseStore(url: string, anonKey: string): Store {
       })
     },
     async seenNotices() {
-      const local = readLocalNotices(userId)
-      if (!snapshot.noticesReady) return local
-      const { data, error } = await sb.from('seen_notices').select('notice')
-      return error ? local : [...new Set([...local, ...(data ?? []).map((r: Row) => r.notice as string)])]
+      return readLocalNotices(userId)
     },
     async markNoticeSeen(notice) {
-      writeLocalNotice(userId, notice) // also remembered on this phone, in case the save fails
-      if (!snapshot.noticesReady) return
-      await sb.from('seen_notices').upsert({ member_id: userId, notice }, { onConflict: 'member_id,notice', ignoreDuplicates: true })
+      writeLocalNotice(userId, notice)
     },
     async getSetting(name) {
       const { data, error } = await sb.from('app_settings').select('value').eq('name', name).maybeSingle()

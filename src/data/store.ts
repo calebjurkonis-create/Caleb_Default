@@ -34,8 +34,6 @@ export interface Snapshot {
   nhoReady?: boolean
   /** Database update 7 is in: agents can add their own leads. */
   ownLeadsReady?: boolean
-  /** Database update 8: "What's new" closes are saved per person. */
-  noticesReady?: boolean
   /** Bumped when a follow-up/appointment is updated, so open agenda lists refresh. */
   itemsVersion?: number
 }
@@ -87,7 +85,7 @@ export interface Store {
   getSetting(name: string): Promise<string>
   /** Managers only. */
   setSetting(name: string, value: string): Promise<void>
-  /** "What's new" announcements this person has already closed (saved to their account when the database has update 8). */
+  /** "What's new" announcements this person has already closed on this phone. */
   seenNotices(): Promise<string[]>
   markNoticeSeen(notice: string): Promise<void>
   /** Managers: fix addresses and/or map locations. */
