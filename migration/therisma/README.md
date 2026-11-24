@@ -9,12 +9,13 @@ Prepared Nov 24, 2026. **Not run.** It only runs after the pilot office signs up
 | `roster-template.csv` | Roster to fill in: name, email, role (owner, manager, agent), reports to. `knockroute_name` links each row to their KnockRoute login. |
 | `extract.sql` | Exports KnockRoute to one JSON file, inside a read-only transaction |
 | `copy.mjs` | Copies that file into one Therisma org. Dry run by default. |
-| `field-map.json` | Where each KnockRoute field lands in Therisma. **Guesses until checked against Therisma's schema.** |
+| `scope.json` | What gets copied: Turning 65 leads with birth months Feb–Jun 2027 only |
+| `field-map.json` | Where each KnockRoute field lands in Therisma. **Unconfirmed: the Therisma side checks it separately.** |
 
 ## Steps on the day
 
 1. Fill in the roster and invite everyone on it to the Therisma org.
-2. In `field-map.json`, set the real Therisma names, then set `"confirmed": true`.
+2. The Therisma side fills in the real names in `field-map.json` and sets `"confirmed": true`.
 3. Export KnockRoute (read only):
    `psql "$KR_DATABASE_URL" -X -q -t -A -v ON_ERROR_STOP=1 -f extract.sql -o kr-bundle.json`
 4. Do a dry run. It writes nothing:

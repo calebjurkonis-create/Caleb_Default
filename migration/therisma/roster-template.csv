@@ -1,9 +1,9 @@
 name,email,role,reports_to,knockroute_name
-Caleb Jurkonis,,owner,,Caleb
+Caleb,,owner,,Caleb
 Albert,,owner,,Albert
+Moose,,manager,,Moose
 Arban,,manager,,Arban
 Casey,,manager,,Casey
-Moose,,manager,,Moose
 Tina,,manager,,Tina
 Christian,,agent,,Christian
 Luis,,agent,,Luis
@@ -12,35 +12,12 @@ Nico,,agent,,Nico
 Johnny,,agent,,Johnny
 Leo,,agent,,Leo
 Jesuel,,agent,,Jesuel
-Lauryn,,agent,,Lauryn
 Lis,,agent,,Lis
 Natawi,,agent,,Natawi
 Jad,,agent,,Jad
 John,,agent,,John
 Justin,,agent,,Justin
 Ishaan,,agent,,Ishaan
-Adrian,,agent,,Adrian
-Aidan,,agent,,Aidan
-Amanda,,agent,,Amanda
 Ami,,agent,,Ami
-Bati,,agent,,Bati
-Colleen,,agent,,Colleen
 Dari,,agent,,Dari
-Giovanni,,agent,,Giovanni
-Gladys,,agent,,Gladys
-Haleigh,,agent,,Haleigh
-Jazlyn,,agent,,Jazlyn
-Jeffrey,,agent,,Jeffrey
-Jose,,agent,,Jose
-Juan,,agent,,Juan
-Karen,,agent,,Karen
-Kenneth,,agent,,Kenneth
-Marsha,,agent,,Marsha
-Mason,,agent,,Mason
-Mazen,,agent,,Mazen
-Nathan M,,agent,,Nathan M
-Nathan W,,agent,,Nathan W
-Richard,,agent,,Richard
-Shamekia,,agent,,Shamekia
-Taylor,,agent,,Taylor
-Timothy,,agent,,Timothy
+Former team member,,agent,,

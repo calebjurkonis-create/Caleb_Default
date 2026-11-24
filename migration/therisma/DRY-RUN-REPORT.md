@@ -1,103 +1,124 @@
 # KnockRoute → Therisma: dry-run report
 
-Taken from KnockRoute's live database on **Nov 24, 2026**, read only. Nothing was copied or exported, and nothing was written to Therisma or KnockRoute.
+Updated **Nov 24, 2026**, from KnockRoute's live database, read only. Nothing was copied or exported, and nothing was written to Therisma or KnockRoute.
+
+## Scope (Caleb's choice)
+
+- **Leads:** only Turning 65 leads with birth months **Feb through Jun 1962**, the people turning 65 in Feb–Jun 2027. `scope.json` sets this, and the copy script applies it.
+- **People:** 21 named:
+  - Owners: Caleb and Albert.
+  - Managers: Moose, Arban, Casey and Tina.
+  - Agents: Christian, Luis, JA, Nico, Johnny, Leo, Jesuel, Lis, Natawi, Jad, John, Justin, Ishaan, Ami and Dari.
+
+  The request said 20, but it named 21, so all 21 are on the roster. Everyone else is left off, including Lauryn and Haleigh. History from anyone left off goes to one placeholder account.
+- **Therisma side:** not seen. `field-map.json` stays marked unconfirmed, and the Therisma side checks it separately.
 
 ## What would be copied
 
 | What | Count | Detail |
 |---|---:|---|
-| Lead lists | 11 | 9 Turning 65 lists, 1 new-homeowner list, 1 agent's own list (Natawi) |
-| Leads | **22,898** | Turning 65: 22,300 · New homeowners: 597 · Agent's own: 1 |
-| Visits (dispositions) | **2,521** | Door: 2,467 · Status updates from the Agenda: 54 |
-| Open appointments and follow-ups | **227** | Appointments: 74 · Follow-ups: 153 (all on Turning 65 leads). 8 have no date. |
+| Lead lists | 9 | The Turning 65 lists that still hold Feb–Jun leads |
+| Leads | **18,435** | All Turning 65 |
+| Visits (dispositions) | **2,061** | Door: 2,030 · Status updates from the Agenda: 31 |
+| Open appointments and follow-ups | **194** | Appointments: 61 · Follow-ups: 133. 3 have no date. |
 | Gated areas | **122** | All active, drawn outlines, 4 to 347 points each |
-| People | 45 | 6 managers, 39 agents. 16 have visits, and 25 have never signed in. |
+| People | 21 on the roster, plus the placeholder | |
 
-**Leads by type and status**
+**Leads by birth month**
 
-| Status | Turning 65 | New homeowner | Own |
-|---|---:|---:|---:|
-| Not worked (new) | 20,195 | 597 | 1 |
-| No answer | 1,120 | | |
-| Not interested | 576 | | |
-| Bad info | 163 | | |
-| Follow-up | 153 | | |
-| Appointment | 74 | | |
-| Sold | 19 | | |
+| Feb 1962 | Mar | Apr | May | Jun |
+|---:|---:|---:|---:|---:|
+| 3,546 | 3,767 | 3,741 | 3,686 | 3,695 |
 
-**Turning 65 by birth month** (these people turn 65 in Jan through Jun 2027)
+**Leads by status:** not worked 16,727 · no answer 888 · not interested 478 · bad info 138 · follow-up 133 · appointment 61 · sold 10.
 
-| Jan 1962 | Feb | Mar | Apr | May | Jun |
-|---:|---:|---:|---:|---:|---:|
-| 3,865 | 3,546 | 3,767 | 3,741 | 3,686 | 3,695 |
+**Visits by result:** no answer 1,173 · not interested 491 · follow-up 161 · bad info 141 · appointment 85 · sold 10. 995 visits have a note.
 
-**Visits by result:** no answer 1,434 · not interested 592 · follow-up 195 · bad info 166 · appointment 115 · sold 19. 1,204 visits have a note. 83 earlier appointments and follow-ups are already closed out.
+**Leads by list**
 
-**Counties:** Orange 4,996 · Polk 3,579 · Marion 2,478 · Lake 2,392 · Seminole 2,021 · Osceola 1,954 · Citrus 1,282 · Clay 1,185 · Sumter 1,076 · Alachua 879 · Hernando 576 · Levy 288 · Bradford 140 · Polk/Osceola 49 · Columbia 2 · blank 1.
+| List | Leads |
+|---|---:|
+| Apr 2027 current territories + Jan–Apr 2027 new counties | 5,937 |
+| May 2027 (all counties) | 3,668 |
+| Jan–Mar 2027 | 3,205 |
+| Jun 2027 (service area) | 2,353 |
+| Feb–Jun 2027 (Bankers, Nov list) | 1,435 |
+| Jan–Mar 2027 (Lake-Orange-Seminole) | 817 |
+| Jan–Mar 2027 (Seminole) | 610 |
+| Jan–Mar 2027 (Sumter) | 341 |
+| DK Route 7 | 69 |
 
-**Other checks:** every lead has a map pin (1,035 are approximate). 3,924 Turning 65 leads have a phone number, and new-homeowner leads have none. Every visit belongs to a lead that still exists and to a person who still has a KnockRoute login.
+The "Jan–Mar" lists keep only their Feb and Mar people, so their names would be off by a month. Renaming them in Therisma afterwards is the simplest fix.
+
+**Counties:** Orange 4,136 · Polk 2,778 · Marion 2,060 · Lake 1,967 · Seminole 1,670 · Osceola 1,345 · Citrus 1,047 · Clay 1,000 · Sumter 883 · Alachua 724 · Hernando 476 · Levy 233 · Bradford 114 · Columbia 2.
+
+**Other checks:**
+- Every lead has a map pin, and 777 of the pins are approximate.
+- 3,260 leads have a phone number.
+- 174 addresses hold more than one lead (the same household).
+
+## What is left behind
+
+| What | Count |
+|---|---:|
+| Jan 2027 Turning 65 leads | 3,865 |
+| New-homeowner leads | 597 |
+| Natawi's own lead | 1 |
+| Visits on those leads | 460 |
+| Open appointments and follow-ups on those leads | 33 |
+| Lists left empty (new homeowners, Natawi's own list) | 2 |
+
+Those 33 open items will not exist in Therisma. Agents who need them should note them before the copy.
 
 ## What wouldn't map cleanly
 
-1. **Gated-area shapes.** KnockRoute stores each outline as a list of `[latitude, longitude]` points and leaves the ring open, so the last point doesn't repeat the first. Most map databases want GeoJSON instead: `[longitude, latitude]` order with the ring closed, or a PostGIS shape. The script can write any of the three, but I need to see which one Therisma's gated-areas table uses.
+1. **Gated-area shapes.** KnockRoute stores each outline as `[latitude, longitude]` points and leaves the ring open, so the last point doesn't repeat the first. Most map databases want GeoJSON: `[longitude, latitude]` order with the ring closed, or a PostGIS shape. The script can write any of the three. The Therisma side picks one in `field-map.json`.
 
-2. **Turning 65 birth-month view.** KnockRoute stores the birth month only (for example `196203`), with no day. The app decides on the fly which months agents see. Today that's people turning 65 from **Feb through May 2027**, plus anyone with an open appointment or follow-up. If Therisma has nothing like that, agents would see all 22,300 at once. The script offers three ways to handle it (Caleb picks one):
-   - Keep the 9 lists as they are.
-   - Regroup the leads into one list per birth month, such as "Turning 65 – Feb 2027", so managers can switch months on and off.
-   - Copy only the months that are still current.
+2. **Turning 65 birth-month view.** KnockRoute stores birth month only, as `196203`, with no day. The app works out which months agents see: today that's Feb–May 2027, plus anyone with an open appointment or follow-up. In Therisma, agents would see all 18,435 at once, unless the lists are regrouped into one list per birth month. That's an option in `field-map.json` ("Turning 65 – Feb 2027" and so on).
 
-   Jan 2027 turners (3,865) are already outside KnockRoute's window.
-
-3. **People who left.** Anyone Caleb leaves off the roster is treated as having left. **16 people have history:**
+3. **People who left.** Within the copied leads, only **Lauryn** has history that isn't on the roster: 47 visits and 1 open follow-up. Those go to the placeholder account, with "[KnockRoute: Lauryn]" at the start of each note. Reassign her open item in KnockRoute first if someone should keep working it. Haleigh has no history. Everyone else with history is on the roster:
 
    | Person | Visits | Open items |
    |---|---:|---:|
-   | Christian | 526 | 55 |
-   | Luis | 421 | 30 |
-   | JA | 384 | 41 |
-   | Nico | 293 | 21 |
-   | Johnny | 242 | 9 |
-   | Caleb | 219 | 28 |
-   | Leo | 190 | 18 |
-   | Jesuel | 89 | 7 |
-   | Lauryn | 66 | 1 |
-   | Lis | 34 | 7 |
+   | Christian | 445 | 49 |
+   | JA | 339 | 36 |
+   | Luis | 330 | 20 |
+   | Nico | 232 | 18 |
+   | Johnny | 185 | 8 |
+   | Leo | 172 | 17 |
+   | Caleb | 164 | 22 |
+   | Jesuel | 68 | 7 |
+   | Lis | 32 | 7 |
    | Natawi | 23 | 3 |
-   | Jad | 9 | 3 |
-   | John | 9 | 2 |
-   | Justin | 7 | 1 |
-   | Moose | 6 | 1 |
+   | Jad | 7 | 3 |
+   | John | 7 | 2 |
+   | Moose | 4 | 0 |
+   | Justin | 3 | 1 |
    | Ishaan | 3 | 0 |
 
-   Natawi also has 1 own lead. If one of these people has left, their visits can't belong to anyone in Therisma. They would go to one placeholder account, such as "Former team member", with the original name kept at the start of each note. Open items from people who left would need a new owner, so it's best to reassign those in KnockRoute before the copy. The other 29 people have no history, so leaving them off loses nothing.
+4. **No real emails for agents.** All 15 agents, and Casey, sign in with stand-in KnockRoute addresses (`…@knockroute.example.com`). Therisma invites by email, so each needs a real one. The script rejects stand-in addresses.
 
-4. **No real emails for agents.** All 39 agents, plus Casey, sign in with stand-in KnockRoute addresses (`…@knockroute.example.com`). Therisma is invite-only by email, so every person needs a real address. The script rejects stand-in addresses.
+5. **Roles and who sees what.** KnockRoute has only manager and agent: every manager sees everything, and there's no reporting chart. In Therisma, access follows reports-to, so the roster decides what each manager sees.
 
-5. **Roles and who sees what.** KnockRoute has only manager and agent: every manager sees everything, and there's no reporting chart. Therisma's access follows the reports-to chart. So the roster decides what each manager sees, and a manager will only see the agents under them.
+6. **Route claims aren't copied.** 1,166 of the copied leads are claimed on an agent's route. Therisma uses territories instead.
 
-6. **New homeowner leads.** All 597 are assigned to Caleb. In KnockRoute only managers can see them. In Therisma, they'll be visible to whoever is above Caleb in the chart and no one below, which matches as long as Caleb is an owner. Their extra fields are sale date, sale price, homestead, buyer flag, parcel id and property type. They need matching Therisma columns, or they'll be left out.
-
-7. **The agent's own lead.** Natawi's 1 own lead is private to Natawi and the managers. In Therisma it lands in Natawi's own list (the list keeps its owner). Whether that keeps it private depends on how Therisma handles list owners.
-
-8. **Route claims aren't copied.** 1,594 Turning 65 leads are claimed on an agent's route. Therisma uses territories instead, so the claims are dropped by default.
-
-9. **Small things:**
-   - 8 open items have no due date.
-   - The 54 status updates count as visits in KnockRoute.
-   - 236 addresses hold more than one lead (same household). They are copied as they are.
+7. **Small things:**
+   - 3 open items have no due date.
+   - The 31 status updates count as visits in KnockRoute.
    - Name prefixes (Mr., Mrs.) are not copied.
    - KnockRoute's ids are kept, so running the copy twice adds nothing the second time.
 
 ## How this was checked
 
-I ran the copy script against a made-up export, with no real people, and a stand-in Therisma database on this machine. It tested:
+The counts above come from read-only queries on KnockRoute.
 
-- all rows landing and the person-to-account matching
-- crediting a person who left to a placeholder account
-- converting gated areas to GeoJSON
-- regrouping Turning 65 leads by birth month
+I tested the copy script on a made-up export (no real people) and on a stand-in Therisma database on this machine. The tests covered:
+
+- only the chosen leads landing, with their visits
+- lists left empty being dropped
+- a person who left being credited to the placeholder account
 - a second run adding nothing
+- a missing invite rolling the whole copy back
+- the script refusing to run without `--caleb-said-go`, or with a KnockRoute database address
 
-I also checked that a missing invite rolls the whole copy back. The script refuses to run without `--caleb-said-go`, and it refuses a KnockRoute database address.
-
-The table and column names on the Therisma side are still guesses, because I haven't seen Therisma's schema.
+The Therisma table and column names are still unconfirmed.

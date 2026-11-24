@@ -45,6 +45,25 @@ if (args.help || !args.bundle) {
 const mode = args.apply ? 'apply' : args['emit-sql'] ? 'emit' : 'dry-run'
 const map = JSON.parse(fs.readFileSync(args.map ?? path.join(HERE, 'field-map.json'), 'utf8'))
 const bundle = JSON.parse(fs.readFileSync(args.bundle, 'utf8'))
+
+// Scope (scope.json): only these leads are copied, with their visits; lists left empty are dropped.
+const scope = JSON.parse(fs.readFileSync(args.scope ?? path.join(HERE, 'scope.json'), 'utf8'))
+const left = { leads: 0, visits: 0, open: 0, lists: 0 }
+{
+  const inScope = (x) =>
+    (!scope.lead_types || scope.lead_types.includes(x.lead_type)) &&
+    (!scope.birth_months || x.lead_type !== 't65' || scope.birth_months.includes(x.dob))
+  const all = { leads: bundle.leads ?? [], acts: bundle.activities ?? [], lists: bundle.lists ?? [] }
+  bundle.leads = all.leads.filter(inScope)
+  const keep = new Set(bundle.leads.map((x) => x.id))
+  bundle.activities = all.acts.filter((a) => keep.has(a.lead_id))
+  const usedLists = new Set(bundle.leads.map((x) => x.list_id))
+  bundle.lists = all.lists.filter((l) => usedLists.has(l.id))
+  left.leads = all.leads.length - bundle.leads.length
+  left.visits = all.acts.length - bundle.activities.length
+  left.open = all.acts.filter((a) => !keep.has(a.lead_id) && (a.outcome === 'appointment' || a.outcome === 'follow_up') && !a.resolved_at).length
+  left.lists = all.lists.length - bundle.lists.length
+}
 const roster = args.roster ? readRoster(args.roster) : null
 const placeholderEmail = (args['former-email'] ?? map.people.former_people.placeholder_email ?? '').trim()
 
@@ -405,6 +424,10 @@ function printReport() {
 
   line(`KnockRoute → Therisma (${mode})`)
   line(`Export taken ${bundle.exported_at}, KnockRoute database version ${bundle.schema_version}`)
+  line(
+    `Scope: ${scope.lead_types?.join(', ') ?? 'all'} leads${scope.birth_months ? `, birth months ${scope.birth_months.join(', ')}` : ''}. ` +
+      `Left behind: ${left.leads.toLocaleString()} leads, ${left.visits.toLocaleString()} visits (${left.open} open items), ${left.lists} lists.`,
+  )
   line()
   line(`Lists ${lists.length}${t65ByMonth ? ' (Turning 65 regrouped by birth month)' : ''}`)
   line(`Leads ${leads.length.toLocaleString()}: ${fmt(count(leads, 'lead_type'))}`)
