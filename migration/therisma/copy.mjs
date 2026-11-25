@@ -156,6 +156,21 @@ for (const a0 of bundle.activities ?? []) {
   }
   activities.push(a)
 }
+// Therisma: each visit insert updates its lead and closes earlier open items on that lead, so visits go in
+// oldest first, with their real time (a time in the future becomes now).
+const nowIso = new Date().toISOString()
+let futureClamped = 0
+for (const a of activities) if (a.created_at > nowIso) (a.created_at = nowIso), futureClamped++
+activities.sort((x, y) => (x.created_at ?? '').localeCompare(y.created_at ?? '') || String(x.id).localeCompare(String(y.id)))
+/** What the Agenda holds after the load, replaying Therisma's rule visit by visit. */
+const openAfterLoad = (() => {
+  const open = new Map() // lead id -> open item ids
+  for (const a of activities) {
+    open.set(a.lead_id, new Set()) // a new visit closes earlier open items on the lead
+    if ((a.outcome === 'appointment' || a.outcome === 'follow_up') && !a.resolved_at && a.due_at) open.get(a.lead_id).add(a.id)
+  }
+  return [...open.values()].reduce((n, s) => n + s.size, 0)
+})()
 const openItems = activities.filter((a) => (a.outcome === 'appointment' || a.outcome === 'follow_up') && !a.resolved_at)
 
 // ---------------------------------------------------------------- gated areas
@@ -482,6 +497,7 @@ function printReport() {
   line(`  contacts: ${activities.filter((a) => ['appointment', 'follow_up', 'not_interested'].includes(a.outcome) && doors.includes(a)).length.toLocaleString()} at the door`)
   line(`  reshaped to fit Therisma: ${reshaped.soldSplit.length} door sales split into appointment + Sold update, ${reshaped.dateFilled.length} undated appointments/follow-ups given the visit time as their date`)
   line(`  deal amounts: none (KnockRoute never recorded them)`)
+  line(`Open after load (replaying Therisma's close-earlier rule): ${openAfterLoad} · visits inserted oldest first · future times set to now: ${futureClamped}`)
   line(`Open appointments and follow-ups ${openItems.length}: ${fmt(count(openItems, 'outcome'))}; ${openItems.filter((a) => !a.due_at).length} with no date`)
   line(`Gated areas ${zones.length} (shape written as ${map.gated_areas.shape_format})`)
   line(`People in KnockRoute ${people.length}: ${fmt(count(people, 'role'))}`)

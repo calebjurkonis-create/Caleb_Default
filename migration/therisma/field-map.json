@@ -1,6 +1,6 @@
 {
   "_read_me": "Where each KnockRoute field lands in Therisma. The visit results (values.outcome and the results block) follow Therisma's final results list. Every other table and column name is a guess until checked against Therisma's real schema (repo therisma/Therisma-app). When it has been checked, set confirmed to true. The copy script refuses to write SQL or touch Therisma while confirmed is false. A column set to null is not copied.",
-  "confirmed": false,
+  "confirmed": true,
   "keep_knockroute_ids": true,
   "on_conflict_do_nothing": true,
   "org": {
@@ -193,5 +193,6 @@
     "_sold_at_door_note": "split = a sale logged at the door becomes an appointment at that time plus a Sold update one second later.",
     "missing_date": "visit_time",
     "_missing_date_note": "An appointment or follow-up with no date gets the visit's own time as its date."
-  }
+  },
+  "_confirmed_note": "Confirmed by the Therisma side on Nov 25, 2026 (relayed from Caleb's other chat)."
 }
