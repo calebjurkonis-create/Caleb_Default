@@ -1,15 +1,12 @@
 {
-  "_read_me": "Where each KnockRoute field lands in Therisma. EVERY table and column name below is a guess until checked against Therisma's real schema (repo therisma/Therisma-app). When it has been checked, set confirmed to true. The copy script refuses to write SQL or touch Therisma while confirmed is false. A column set to null is not copied.",
+  "_read_me": "Where each KnockRoute field lands in Therisma. The visit results (values.outcome and the results block) follow Therisma's final results list. Every other table and column name is a guess until checked against Therisma's real schema (repo therisma/Therisma-app). When it has been checked, set confirmed to true. The copy script refuses to write SQL or touch Therisma while confirmed is false. A column set to null is not copied.",
   "confirmed": false,
-
   "keep_knockroute_ids": true,
   "on_conflict_do_nothing": true,
-
   "org": {
     "_note": "TODO-confirm: the query must return one row when the org exists. :org is replaced with the org id.",
     "check_sql": "select 1 from organizations where id = :org"
   },
-
   "people": {
     "_note": "TODO-confirm: how to find a Therisma user id for an invited person in this org by email. :org and :email are replaced. People must be invited (and have accepted, if Therisma only creates the row then) before the copy runs.",
     "lookup_sql": "select m.user_id from org_members m join auth.users u on u.id = m.user_id where m.org_id = :org and lower(u.email) = lower(:email) limit 1",
@@ -19,7 +16,6 @@
       "note_prefix": "[KnockRoute: {name}] "
     }
   },
-
   "lists": {
     "table": "lead_lists",
     "columns": {
@@ -33,7 +29,6 @@
     "t65_lists": "keep",
     "_t65_lists_options": "keep = the 9 Turning 65 lists stay as they are. by_month = Turning 65 leads are regrouped into one list per birth month (Turning 65 – Jan 2027, …) so Therisma can show the current months without a birth-month feature."
   },
-
   "leads": {
     "table": "leads",
     "columns": {
@@ -73,15 +68,14 @@
     "dob_format": "yyyy-mm",
     "_dob_format_options": "KnockRoute stores birth month only, as 196203. yyyymm = keep 196203. yyyy-mm = 1962-03. date = 1962-03-01 (a real date column; the day is made up)."
   },
-
   "dispositions": {
-    "_note": "Every KnockRoute visit (door knock or status update).",
-    "table": "dispositions",
+    "_note": "Every KnockRoute visit becomes one Therisma activity with exactly one built-in result (activities.outcome).",
+    "table": "activities",
     "columns": {
       "id": "id",
       "org_id": "org_id",
       "lead_id": "lead_id",
-      "member_id": "user_id",
+      "member_id": "member_id",
       "channel": "channel",
       "outcome": "outcome",
       "notes": "notes",
@@ -90,10 +84,13 @@
       "due_at": "due_at",
       "resolved_at": "resolved_at",
       "resolution": "resolution",
-      "lead_type": null
-    }
+      "lead_type": null,
+      "deal_cents": "deal_cents",
+      "result_key": null
+    },
+    "_deal_cents_note": "Deal amount in whole cents. KnockRoute never recorded deal amounts (leads.sale_price is the home sale price from new-homeowner data, not a deal), so this is empty for every copied visit.",
+    "_result_key_note": "For office-named results (max 12). KnockRoute has none, so it is never set."
   },
-
   "open_items": {
     "_note": "Open appointments and follow-ups (KnockRoute's Agenda). same_table = they stay as dispositions with due_at set and resolved_at empty, as in KnockRoute. separate_table = each one is ALSO written to the table below.",
     "mode": "same_table",
@@ -109,7 +106,6 @@
       "created_at": "created_at"
     }
   },
-
   "gated_areas": {
     "table": "gated_areas",
     "columns": {
@@ -125,10 +121,13 @@
     "shape_format": "geojson",
     "_shape_format_options": "latlng = KnockRoute's own [[lat,lng],…] open ring, unchanged. geojson = a GeoJSON Polygon object (jsonb), [lng,lat] order, ring closed. wkt = 'SRID=4326;POLYGON((lng lat, …))' text, for a PostGIS geometry column."
   },
-
   "values": {
     "_note": "TODO-confirm each against Therisma's allowed values. Left side is KnockRoute.",
-    "lead_type": { "t65": "t65", "nho": "nho", "personal": "personal" },
+    "lead_type": {
+      "t65": "t65",
+      "nho": "nho",
+      "personal": "personal"
+    },
     "status": {
       "new": "new",
       "no_answer": "no_answer",
@@ -140,13 +139,53 @@
     },
     "outcome": {
       "no_answer": "no_answer",
+      "appointment": "appointment",
+      "follow_up": "follow_up",
       "not_interested": "not_interested",
       "bad_info": "bad_info",
-      "follow_up": "follow_up",
-      "appointment": "appointment",
       "sold": "sold"
     },
-    "channel": { "door": "door", "phone": "phone", "update": "update" },
-    "zone_status": { "active": "active" }
+    "channel": {
+      "door": "door",
+      "phone": "phone",
+      "update": "update"
+    },
+    "zone_status": {
+      "active": "active"
+    }
+  },
+  "results_confirmed": true,
+  "results": {
+    "_note": "Therisma's built-in results (final list, Nov 25 2026). KnockRoute outcomes are mapped onto these in values.outcome.",
+    "built_in": [
+      "no_answer",
+      "appointment",
+      "follow_up",
+      "not_interested",
+      "bad_info",
+      "sold",
+      "left_note",
+      "info_requested"
+    ],
+    "old_only": [
+      "left_note",
+      "info_requested"
+    ],
+    "needs_date": [
+      "appointment",
+      "follow_up"
+    ],
+    "update_only": [
+      "sold"
+    ],
+    "door_channels": [
+      "door",
+      "phone"
+    ],
+    "update_channel": "update",
+    "sold_at_door": "split",
+    "_sold_at_door_note": "split = a sale logged at the door becomes an appointment at that time plus a Sold update one second later.",
+    "missing_date": "visit_time",
+    "_missing_date_note": "An appointment or follow-up with no date gets the visit's own time as its date."
   }
 }

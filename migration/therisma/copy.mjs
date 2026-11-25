@@ -131,11 +131,29 @@ if (t65ByMonth) {
 const leads = (bundle.leads ?? []).map((x) => ({ ...x, list_id: listIdFor.get(x.id) ?? x.list_id, dob: dob(x.dob) }))
 
 // ---------------------------------------------------------------- dispositions & open items
-const activities = (bundle.activities ?? []).map((a) => {
-  const who = personTarget.get(a.member_id)
-  const prefix = who === 'former' ? map.people.former_people.note_prefix.replace('{name}', personById.get(a.member_id)?.name ?? 'unknown') : ''
-  return { ...a, notes: prefix ? prefix + (a.notes ?? '') : a.notes }
-})
+const R = map.results ?? {}
+const reshaped = { soldSplit: [], dateFilled: [] } // KnockRoute visits that didn't fit Therisma's results one-to-one
+const activities = []
+for (const a0 of bundle.activities ?? []) {
+  const who = personTarget.get(a0.member_id)
+  const prefix = who === 'former' ? map.people.former_people.note_prefix.replace('{name}', personById.get(a0.member_id)?.name ?? 'unknown') : ''
+  const a = { ...a0, notes: prefix ? prefix + (a0.notes ?? '') : a0.notes, deal_cents: null }
+  // Sold is only ever a status update on an earlier appointment. A sale logged at the door becomes
+  // an appointment at that moment (closed as sold) plus a Sold update one second later.
+  if ((R.update_only ?? []).includes(a.outcome) && a.channel !== R.update_channel && R.sold_at_door === 'split') {
+    reshaped.soldSplit.push(a0.id)
+    activities.push({ ...a, outcome: 'appointment', due_at: a.created_at, resolved_at: a.created_at, resolution: a.outcome })
+    const t = new Date(new Date(a.created_at).getTime() + 1000).toISOString()
+    activities.push({ ...a, id: stableId(`sold-update:${a0.id}`), channel: R.update_channel, created_at: t, due_at: null, resolved_at: null, resolution: null, notes: null })
+    continue
+  }
+  // Appointments and follow-ups need a date: give a dateless one the visit's own time.
+  if ((R.needs_date ?? []).includes(a.outcome) && !a.due_at && R.missing_date === 'visit_time') {
+    reshaped.dateFilled.push(a0.id)
+    a.due_at = a.created_at
+  }
+  activities.push(a)
+}
 const openItems = activities.filter((a) => (a.outcome === 'appointment' || a.outcome === 'follow_up') && !a.resolved_at)
 
 // ---------------------------------------------------------------- gated areas
@@ -147,8 +165,15 @@ checkValues('status', leads.map((x) => x.status))
 checkValues('outcome', activities.map((a) => a.outcome))
 checkValues('outcome', activities.map((a) => a.resolution).filter(Boolean))
 checkValues('channel', activities.map((a) => a.channel))
+if (R.built_in) {
+  const bad = [...new Set(activities.flatMap((a) => [a.outcome, a.resolution]).filter((v) => v && !R.built_in.includes(map.values.outcome[v])))]
+  if (bad.length) block(`results: ${bad.join(', ')} don't map to one of Therisma's built-in results.`)
+  const doorSold = activities.filter((a) => (R.update_only ?? []).includes(a.outcome) && a.channel !== R.update_channel).length
+  if (doorSold) block(`results: ${doorSold} Sold visits are not status updates.`)
+}
 checkValues('zone_status', zones.map((z) => z.status))
 if (!map.confirmed) block('field-map.json is not confirmed against Therisma’s schema yet ("confirmed": false).')
+args.org ??= scope.therisma_org_id
 if (mode !== 'dry-run' && !UUID.test(args.org ?? '')) block('--org must be the Therisma org id (a uuid).')
 
 // ---------------------------------------------------------------- report
@@ -422,7 +447,7 @@ function printReport() {
   const fmt = (m) => [...m].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n.toLocaleString()}`).join(' · ')
   const line = (s = '') => console.log(s)
 
-  line(`KnockRoute → Therisma (${mode})`)
+  line(`KnockRoute → Therisma (${mode}) · org ${args.org ?? scope.therisma_org_id ?? 'not set'}${scope.therisma_org_name ? ` (${scope.therisma_org_name})` : ''}`)
   line(`Export taken ${bundle.exported_at}, KnockRoute database version ${bundle.schema_version}`)
   line(
     `Scope: ${scope.lead_types?.join(', ') ?? 'all'} leads${scope.birth_months ? `, birth months ${scope.birth_months.join(', ')}` : ''}. ` +
@@ -434,6 +459,13 @@ function printReport() {
   for (const [type] of count(leads, 'lead_type')) line(`  ${type}: ${fmt(count(leads.filter((x) => x.lead_type === type), 'status'))}`)
   line(`Visits ${activities.length.toLocaleString()}: ${fmt(count(activities, 'outcome'))}`)
   line(`  by channel: ${fmt(count(activities, 'channel'))}`)
+  const doors = activities.filter((a) => (R.door_channels ?? ['door', 'phone']).includes(a.channel))
+  const tally = (o) => activities.filter((a) => a.outcome === o).length
+  line(`  doors (DKs): ${doors.length.toLocaleString()} · updates: ${(activities.length - doors.length).toLocaleString()}`)
+  line(`  Appt ${tally('appointment')} · F/U ${tally('follow_up')} · NI ${tally('not_interested')} · Sold ${tally('sold')} (doors and updates together)`)
+  line(`  contacts: ${activities.filter((a) => ['appointment', 'follow_up', 'not_interested'].includes(a.outcome) && doors.includes(a)).length.toLocaleString()} at the door`)
+  line(`  reshaped to fit Therisma: ${reshaped.soldSplit.length} door sales split into appointment + Sold update, ${reshaped.dateFilled.length} undated appointments/follow-ups given the visit time as their date`)
+  line(`  deal amounts: none (KnockRoute never recorded them)`)
   line(`Open appointments and follow-ups ${openItems.length}: ${fmt(count(openItems, 'outcome'))}; ${openItems.filter((a) => !a.due_at).length} with no date`)
   line(`Gated areas ${zones.length} (shape written as ${map.gated_areas.shape_format})`)
   line(`People in KnockRoute ${people.length}: ${fmt(count(people, 'role'))}`)

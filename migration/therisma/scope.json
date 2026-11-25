@@ -1,6 +1,16 @@
 {
   "_read_me": "What gets copied from KnockRoute (Caleb's choice, Nov 24 2026). Leads outside this are left behind, with their visits and open items.",
-  "lead_types": ["t65"],
-  "birth_months": ["196202", "196203", "196204", "196205", "196206"],
+  "therisma_org_id": "21754a63-930a-44da-8e68-76bb15485f1a",
+  "therisma_org_name": "BLC - Clermont/Ocala",
+  "lead_types": [
+    "t65"
+  ],
+  "birth_months": [
+    "196202",
+    "196203",
+    "196204",
+    "196205",
+    "196206"
+  ],
   "_birth_months_note": "Birth months as KnockRoute stores them (YYYYMM). 196202-196206 = turning 65 Feb through Jun 2027."
 }

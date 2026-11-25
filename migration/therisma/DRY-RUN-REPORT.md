@@ -1,6 +1,6 @@
 # KnockRoute → Therisma: dry-run report
 
-Updated **Nov 24, 2026**, from KnockRoute's live database, read only. Nothing was copied or exported, and nothing was written to Therisma or KnockRoute.
+Updated **Nov 25, 2026**, from KnockRoute's live database, read only. Nothing was copied or exported, and nothing was written to Therisma or KnockRoute.
 
 ## Scope (Caleb's choice)
 
@@ -11,7 +11,8 @@ Updated **Nov 24, 2026**, from KnockRoute's live database, read only. Nothing wa
   - Agents: Christian, Luis, JA, Nico, Johnny, Leo, Jesuel, Lis, Natawi, Jad, John, Justin, Ishaan, Ami and Dari.
 
   The request said 20, but it named 21, so all 21 are on the roster. Everyone else is left off, including Lauryn and Haleigh. History from anyone left off goes to one placeholder account.
-- **Therisma side:** not seen. `field-map.json` stays marked unconfirmed, and the Therisma side checks it separately.
+- **Therisma org:** `21754a63-930a-44da-8e68-76bb15485f1a` (BLC - Clermont/Ocala), set in `scope.json`.
+- **Therisma side:** the results list is final and the field map follows it. Other table and column names stay unconfirmed, and the Therisma side checks them separately.
 
 ## What would be copied
 
@@ -56,6 +57,37 @@ The "Jan–Mar" lists keep only their Feb and Mar people, so their names would b
 - Every lead has a map pin, and 777 of the pins are approximate.
 - 3,260 leads have a phone number.
 - 174 addresses hold more than one lead (the same household).
+
+## Visit results (Therisma's final list)
+
+Every copied visit maps to exactly one built-in result, with nothing left over:
+
+| KnockRoute result | Therisma result | Doors | Updates | Total |
+|---|---|---:|---:|---:|
+| no_answer | No Answer/Not Home | 1,173 | 0 | 1,173 |
+| appointment | Appointment | 81 | 4 | 85 |
+| follow_up | Follow-up | 152 | 9 | 161 |
+| not_interested | Not Interested | 483 | 8 | 491 |
+| bad_info | Bad Info | 141 | 0 | 141 |
+| sold | Sold | 0 | 10 | 10 |
+| **Total** | | **2,030** | **31** | **2,061** |
+
+- **Doors (DKs):** 2,030, all on channel `door`. KnockRoute has no phone visits on these leads.
+- **Contacts at the door:** 716 (appointment, follow-up and not interested).
+- **What counts in Appt, F/U, NI and Sold (doors plus updates):** Appt 85 · F/U 161 · NI 491 · Sold 10.
+- **Sold:** all 10 are status updates on an earlier appointment, so no door sale needed splitting. The script would still split one into an appointment plus a Sold update.
+- **Deal amounts (`deal_cents`):** empty for all 10 sales. KnockRoute never recorded deal amounts. Its `leads.sale_price` is the home sale price from new-homeowner data, and none of the copied leads has one.
+- **No dates:** 10 appointments and follow-ups had no date: 3 still open, 7 closed. Each gets the visit's own time as its date, so the 3 open ones show as overdue in the Agenda.
+- **Never visited:** every lead with no visits is `new` (16,727), and every visited lead's status matches its latest result.
+- **Office-named results (`result_key`):** KnockRoute has none, so it is never set. Old-only results (left_note, info_requested) aren't used either.
+- **How earlier items were closed:** 52 earlier appointments and follow-ups were closed with a result recorded on the item itself:
+  - appointment: 7
+  - follow-up: 13
+  - not interested: 15
+  - sold: 10
+  - no answer: 7
+
+  Only 31 of those closes also logged their own status update. The 7 "no answer" closes and some of the others exist only as that recorded result. They carry over as `resolved_at`/`resolution` on the original visit, if Therisma's activities table has those columns.
 
 ## What is left behind
 
