@@ -10,7 +10,7 @@ Updated **Nov 25, 2026**, from KnockRoute's live database, read only. Nothing wa
   - Managers: Moose, Arban, Casey and Tina.
   - Agents: Christian, Luis, JA, Nico, Johnny, Leo, Jesuel, Lis, Natawi, Jad, John, Justin, Ishaan, Ami and Dari.
 
-  The request said 20, but it named 21, so all 21 are on the roster. Everyone else is left off, including Lauryn and Haleigh. History from anyone left off goes to one placeholder account.
+  The request said 20, but it named 21, so all 21 are on the roster. Everyone else is left off, including Lauryn and Haleigh. Lauryn's history goes to Caleb, per Caleb on Nov 25. No one else left off has history, so no placeholder account is needed.
 - **Therisma org:** `21754a63-930a-44da-8e68-76bb15485f1a` (BLC - Clermont/Ocala), set in `scope.json`.
 - **Therisma side:** the results list is final and the field map follows it. Other table and column names stay unconfirmed, and the Therisma side checks them separately.
 
@@ -23,7 +23,7 @@ Updated **Nov 25, 2026**, from KnockRoute's live database, read only. Nothing wa
 | Visits (dispositions) | **2,061** | Door: 2,030 · Status updates from the Agenda: 31 |
 | Open appointments and follow-ups | **194** | Appointments: 61 · Follow-ups: 133. 3 have no date. |
 | Gated areas | **122** | All active, drawn outlines, 4 to 347 points each |
-| People | 21 on the roster, plus the placeholder | |
+| People | 21 on the roster | |
 
 **Leads by birth month**
 
@@ -108,7 +108,7 @@ Those 33 open items will not exist in Therisma. Agents who need them should note
 
 2. **Turning 65 birth-month view.** KnockRoute stores birth month only, as `196203`, with no day. The app works out which months agents see: today that's Feb–May 2027, plus anyone with an open appointment or follow-up. In Therisma, agents would see all 18,435 at once, unless the lists are regrouped into one list per birth month. That's an option in `field-map.json` ("Turning 65 – Feb 2027" and so on).
 
-3. **People who left.** Within the copied leads, only **Lauryn** has history that isn't on the roster: 47 visits and 1 open follow-up. Those go to the placeholder account, with "[KnockRoute: Lauryn]" at the start of each note. Reassign her open item in KnockRoute first if someone should keep working it. Haleigh has no history. Everyone else with history is on the roster:
+3. **People who left.** Within the copied leads, only **Lauryn** has history from someone not on the roster: 47 visits and 1 open follow-up. **All of it goes to Caleb**, with "[KnockRoute: Lauryn]" at the start of each note so it stays traceable. Her open follow-up lands in Caleb's Agenda. Haleigh has no history. Everyone else with history is on the roster:
 
    | Person | Visits | Open items |
    |---|---:|---:|
@@ -148,7 +148,7 @@ I tested the copy script on a made-up export (no real people) and on a stand-in 
 
 - only the chosen leads landing, with their visits
 - lists left empty being dropped
-- a person who left being credited to the placeholder account
+- a person who left being credited to someone on the roster (a second KnockRoute name on their row), with the original name kept in the note
 - a second run adding nothing
 - a missing invite rolling the whole copy back
 - the script refusing to run without `--caleb-said-go`, or with a KnockRoute database address

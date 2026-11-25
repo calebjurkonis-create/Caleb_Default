@@ -1,5 +1,5 @@
 name,email,role,reports_to,knockroute_name
-Caleb,,owner,,Caleb
+Caleb,,owner,,Caleb|Lauryn
 Albert,,owner,,Albert
 Moose,,manager,,Moose
 Arban,,manager,,Arban
@@ -20,4 +20,3 @@ Justin,,agent,,Justin
 Ishaan,,agent,,Ishaan
 Ami,,agent,,Ami
 Dari,,agent,,Dari
-Former team member,,agent,,

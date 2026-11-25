@@ -87,7 +87,7 @@ if (!roster) {
   checkRoster(roster)
   for (const p of people) {
     const r = roster.rows.find(
-      (r) => eq(r.knockroute_name, p.name) || (!r.knockroute_name && eq(r.name, p.name)) || (p.email && eq(r.email, p.email)),
+      (r) => (r.knockroute_name ?? '').split('|').some((n) => eq(n, p.name)) || (!r.knockroute_name && eq(r.name, p.name)) || (p.email && eq(r.email, p.email)),
     )
     personTarget.set(p.id, r ?? 'former')
   }
@@ -136,7 +136,9 @@ const reshaped = { soldSplit: [], dateFilled: [] } // KnockRoute visits that did
 const activities = []
 for (const a0 of bundle.activities ?? []) {
   const who = personTarget.get(a0.member_id)
-  const prefix = who === 'former' ? map.people.former_people.note_prefix.replace('{name}', personById.get(a0.member_id)?.name ?? 'unknown') : ''
+  // Credited to someone else (a person who left, or a second KnockRoute name on a roster row): keep the original name in the note.
+  const kept = who && who !== 'former' && eq((who.knockroute_name || who.name).split('|')[0], personById.get(a0.member_id)?.name)
+  const prefix = !kept ? map.people.former_people.note_prefix.replace('{name}', personById.get(a0.member_id)?.name ?? 'unknown') : ''
   const a = { ...a0, notes: prefix ? prefix + (a0.notes ?? '') : a0.notes, deal_cents: null }
   // Sold is only ever a status update on an earlier appointment. A sale logged at the door becomes
   // an appointment at that moment (closed as sold) plus a Sold update one second later.
