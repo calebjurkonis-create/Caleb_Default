@@ -16,7 +16,8 @@
       "note_prefix": "[KnockRoute: {name}] "
     },
     "id_check_sql": "select 1 from org_members m where m.org_id = :org and m.user_id = :id",
-    "_id_check_note": "TODO-confirm. For roster rows given a therisma_user_id (placeholder people with no email yet): the copy stops unless each id is a member of the org. :org and :id are replaced."
+    "_id_check_note": "TODO-confirm. For roster rows given a therisma_user_id (placeholder people with no email yet): the copy stops unless each id is a member of the org. :org and :id are replaced.",
+    "_read_me": "People are targeted by Therisma user id only (roster column therisma_user_id). The copy never creates people. Email lookup is only a fallback for a row with no id."
   },
   "lists": {
     "table": "lead_lists",
@@ -68,7 +69,8 @@
       "created_at": "created_at"
     },
     "dob_format": "yyyy-mm",
-    "_dob_format_options": "KnockRoute stores birth month only, as 196203. yyyymm = keep 196203. yyyy-mm = 1962-03. date = 1962-03-01 (a real date column; the day is made up)."
+    "_dob_format_options": "KnockRoute stores birth month only, as 196203. yyyymm = keep 196203. yyyy-mm = 1962-03. date = 1962-03-01 (a real date column; the day is made up).",
+    "_assigned_to_note": "Takes the Therisma user id. None of the 18,435 copied leads is assigned to anyone in KnockRoute."
   },
   "dispositions": {
     "_note": "Every KnockRoute visit becomes one Therisma activity with exactly one built-in result (activities.outcome).",
@@ -88,10 +90,12 @@
       "resolution": "resolution",
       "lead_type": null,
       "deal_cents": "deal_cents",
-      "result_key": null
+      "result_key": null,
+      "handled_by": "handled_by"
     },
     "_deal_cents_note": "Deal amount in whole cents. KnockRoute never recorded deal amounts (leads.sale_price is the home sale price from new-homeowner data, not a deal), so this is empty for every copied visit.",
-    "_result_key_note": "For office-named results (max 12). KnockRoute has none, so it is never set."
+    "_result_key_note": "For office-named results (max 12). KnockRoute has none, so it is never set.",
+    "_handled_by_note": "Therisma: set when an open appointment or follow-up belongs to someone other than who logged it. KnockRoute has no such hand-off (every open item belongs to whoever logged it), so it is always empty. Lauryn's items are logged AND owned by Caleb after the copy."
   },
   "open_items": {
     "_note": "Open appointments and follow-ups (KnockRoute's Agenda). same_table = they stay as dispositions with due_at set and resolved_at empty, as in KnockRoute. separate_table = each one is ALSO written to the table below.",
