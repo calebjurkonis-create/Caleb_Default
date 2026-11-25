@@ -12,7 +12,6 @@ Already decided:
 Still open:
 
 1. **Therisma user ids for the 16 placeholder people** (Casey and the 15 agents). They go in `therisma_user_id` on the roster. The copy stops unless each id is a member of the pilot org.
-2. **Two bosses:** the four managers and Dari report to "Caleb|Albert". Confirm Therisma allows two people in reports-to; if not, pick one.
-3. **33 open items on leads that stay behind** (January turners and new homeowners): should anyone note them first?
-4. **For the real dry run:** the KnockRoute export file (`extract.sql`), which needs KnockRoute's database password or someone with it to run one command.
-5. **On the day:** the Therisma side's confirmed table and column names in `field-map.json`, whoever runs the final command, and the go plus a quiet hour.
+2. **33 open items on leads that stay behind** (January turners and new homeowners): should anyone note them first?
+3. **For the real dry run:** the KnockRoute export file (`extract.sql`), which needs KnockRoute's database password or someone with it to run one command.
+4. **On the day:** the Therisma side's confirmed table and column names in `field-map.json`, whoever runs the final command, and the go plus a quiet hour.
