@@ -8,6 +8,7 @@ Prepared Nov 24, 2026. **Not run.** It only runs after the pilot office signs up
 | `NEEDS-FROM-CALEB.md` | What's still missing before it can run |
 | `roster-template.csv` | Roster to fill in: name, email, role (owner, manager, agent), reports to. `knockroute_name` links each row to their KnockRoute login; several names separated by `|` credit someone else's history to that person (Caleb's row has `Caleb|Lauryn|Haleigh`). `therisma_user_id` is for people Therisma creates without an email. |
 | `extract.sql` | Exports KnockRoute to one JSON file, inside a read-only transaction |
+| `extract-rest.mjs` | Same export over Supabase's REST API, GET requests only, for when there's no database password (the key comes in as a network secret, never in chat or git) |
 | `copy.mjs` | Copies that file into one Therisma org. Dry run by default. |
 | `scope.json` | What gets copied: Turning 65 leads with birth months Feb–Jun 2027 only |
 | `field-map.json` | Where each KnockRoute field lands in Therisma. **Unconfirmed: the Therisma side checks it separately.** |
