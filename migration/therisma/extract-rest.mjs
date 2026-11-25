@@ -32,13 +32,13 @@ const TABLES = {
   ],
   activities: ['activities', 'id,lead_id,member_id,channel,outcome,notes,lead_label,lead_type,created_at,due_at,resolved_at,resolution'],
   gated_zones: ['gated_zones', 'id,name,points,source,status,created_by,created_at'],
-  settings: ['app_settings', '*'],
+  settings: ['app_settings', '*', ''],
 }
 
-async function getAll(table, select) {
+async function getAll(table, select, order = 'id.asc') {
   const rows = []
   for (let from = 0; ; from += PAGE) {
-    const url = `${BASE}/${table}?select=${select}&order=id.asc&offset=${from}&limit=${PAGE}`
+    const url = `${BASE}/${table}?select=${select}${order ? `&order=${order}` : ''}&offset=${from}&limit=${PAGE}`
     const res = await fetch(url, { method: 'GET', headers: { apikey: KEY, Accept: 'application/json' } })
     if (!res.ok) throw new Error(`${table}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`)
     const page = await res.json()
@@ -48,8 +48,8 @@ async function getAll(table, select) {
 }
 
 const bundle = { source: 'knockroute', exported_at: new Date().toISOString(), schema_version: null, via: 'rest' }
-for (const [key, [table, select]] of Object.entries(TABLES)) {
-  bundle[key] = await getAll(table, select)
+for (const [key, [table, select, order]] of Object.entries(TABLES)) {
+  bundle[key] = await getAll(table, select, order)
   console.log(`${key}: ${bundle[key].length.toLocaleString()}`)
 }
 fs.writeFileSync(out, JSON.stringify(bundle))
