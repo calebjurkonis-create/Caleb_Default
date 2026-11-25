@@ -1,32 +1,41 @@
+// KnockRoute has moved to Therisma (Nov 25, 2026). The app now shows only this notice, to everyone,
+// signed in or not, and makes no calls to the database. The old app code is still in the repo
+// (src/App.tsx) and in git history; no data was changed or deleted.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { App } from './App'
-import { createDemoStore } from './data/demoStore'
-import { createSupabaseStore } from './data/supabaseStore'
-import './styles.css'
 
-// The office's Supabase project. The publishable key is meant to ship in the app;
-// logins and the database's access rules are what protect the data.
-// Set VITE_DEMO=1 to run with sample data instead.
-const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://wybrhduekutlgsahbrqj.supabase.co'
-const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || 'sb_publishable_4WT0bYgSGyFrrx_a7BEuNg_SZs2em9v'
-// knockroute.vercel.app/demo: a private trial for someone outside the office. It never
-// touches the team database; everything stays in that phone's browser.
-const GUEST_NAME = 'Eric'
-const isGuest = /^\/demo\/?$/.test(location.pathname)
-if (isGuest) {
-  document.querySelector('link[rel="manifest"]')?.setAttribute('href', '/demo.webmanifest')
-  document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', 'KnockRoute Demo')
-  document.title = 'KnockRoute Demo'
+function Moved() {
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="KnockRoute has moved"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 2147483647,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 16px',
+        background: '#12324a',
+        color: '#fff',
+        textAlign: 'center',
+        fontFamily: "Barlow, system-ui, -apple-system, 'Segoe UI', sans-serif",
+      }}
+    >
+      <div style={{ maxWidth: 420 }}>
+        <h1 style={{ fontFamily: "'Barlow Semi Condensed', Barlow, system-ui, sans-serif", fontSize: 30, lineHeight: 1.2, margin: '0 0 14px' }}>
+          KnockRoute has moved to Therisma.
+        </h1>
+        <p style={{ fontSize: 20, lineHeight: 1.4, margin: 0 }}>Text Caleb for your login.</p>
+      </div>
+    </div>
+  )
 }
-const store = isGuest
-  ? createDemoStore({ guestName: GUEST_NAME })
-  : import.meta.env.VITE_DEMO
-    ? createDemoStore()
-    : createSupabaseStore(url, key)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App store={store} />
+    <Moved />
   </StrictMode>,
 )
