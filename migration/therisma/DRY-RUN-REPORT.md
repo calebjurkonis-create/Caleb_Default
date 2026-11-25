@@ -10,7 +10,7 @@ Updated **Nov 25, 2026**, from KnockRoute's live database, read only. Nothing wa
   - Managers: Moose, Arban, Casey and Tina.
   - Agents: Christian, Luis, JA, Nico, Johnny, Leo, Jesuel, Lis, Natawi, Jad, John, Justin, Ishaan, Ami and Dari.
 
-  The request said 20, but it named 21, so all 21 are on the roster. Everyone else is left off, including Lauryn and Haleigh. Lauryn's history goes to Caleb, per Caleb on Nov 25. No one else left off has history, so no placeholder account is needed.
+  The request said 20, but it named 21, so all 21 are on the roster. Everyone else is left off, including Lauryn and Haleigh. Lauryn's and Haleigh's history goes to Caleb, tagged with their names (Haleigh has none on the copied leads). "JA" becomes **Jon Anthony**. Reporting lines are set in the roster: Moose has Christian, Luis, Jon Anthony, Nico, Johnny and Jad; Arban has Leo, Jesuel, Lis and John; Casey has Natawi, Ishaan and Ami; Tina has Justin; Dari and the four managers report to the owners. Casey and the 15 agents load onto placeholder people that Therisma creates (no email); their Therisma user ids go in the roster's `therisma_user_id` column when Therisma sends them.
 - **Therisma org:** `21754a63-930a-44da-8e68-76bb15485f1a` (BLC - Clermont/Ocala), set in `scope.json`.
 - **Therisma side:** the results list is final and the field map follows it. Other table and column names stay unconfirmed, and the Therisma side checks them separately.
 
@@ -137,7 +137,7 @@ Those 33 open items will not exist in Therisma. Agents who need them should note
 7. **Small things:**
    - 3 open items have no due date.
    - The 31 status updates count as visits in KnockRoute.
-   - Name prefixes (Mr., Mrs.) are not copied.
+   - Name prefixes (Mr., Mrs.; 17,361 leads have one) are now copied to a `prefix` column, unconfirmed on the Therisma side.
    - KnockRoute's ids are kept, so running the copy twice adds nothing the second time.
 
 ## How this was checked

@@ -14,7 +14,9 @@
       "_note": "People in KnockRoute who are not on Caleb's roster (left the team). Their visits are kept and credited to one placeholder account, with the original name written into the note.",
       "placeholder_email": "",
       "note_prefix": "[KnockRoute: {name}] "
-    }
+    },
+    "id_check_sql": "select 1 from org_members m where m.org_id = :org and m.user_id = :id",
+    "_id_check_note": "TODO-confirm. For roster rows given a therisma_user_id (placeholder people with no email yet): the copy stops unless each id is a member of the org. :org and :id are replaced."
   },
   "lists": {
     "table": "lead_lists",
@@ -36,7 +38,7 @@
       "org_id": "org_id",
       "list_id": "list_id",
       "lead_type": "lead_type",
-      "prefix": null,
+      "prefix": "prefix",
       "first_name": "first_name",
       "last_name": "last_name",
       "address": "address",

@@ -6,16 +6,13 @@ Already decided:
 - Pilot org BLC - Clermont/Ocala (`21754a63-930a-44da-8e68-76bb15485f1a`).
 - Therisma's results list. Every KnockRoute result maps one-to-one.
 - No Therisma access for this side.
-- Lauryn's 47 visits and 1 open follow-up go to Caleb. No placeholder account is needed.
+- 21 people, with Jon Anthony's name fixed and reporting lines set. Lauryn's and Haleigh's history goes to Caleb.
+- Emails received for Caleb, Albert, Arban, Moose and Tina (kept out of git: the repo is public).
 
 Still open:
 
-1. **Emails:** 5 received: Caleb, Albert, Arban, Moose and Tina. Still needed: Casey and all 15 agents, who sign in to KnockRoute with stand-in addresses. Because this repo is public, emails are kept only in the uncommitted `roster.csv`, never in git.
-2. **Reports-to** for everyone except the two owners: 19 rows.
-3. **Confirm the headcount.** The request said 20 people but named 21.
-4. **33 open items on leads that stay behind.** These are January turners and new homeowners. Should anyone write them down before the copy?
-5. **Invites.** Everyone on the roster must be invited to the BLC - Clermont/Ocala org before the copy.
-6. **On the day:**
-   - the Therisma side's confirmed table and column names in `field-map.json`
-   - whoever runs the final command
-   - the go, plus a quiet hour when agents stop logging visits in KnockRoute
+1. **Therisma user ids for the 16 placeholder people** (Casey and the 15 agents). They go in `therisma_user_id` on the roster. The copy stops unless each id is a member of the pilot org.
+2. **Two bosses:** the four managers and Dari report to "Caleb|Albert". Confirm Therisma allows two people in reports-to; if not, pick one.
+3. **33 open items on leads that stay behind** (January turners and new homeowners): should anyone note them first?
+4. **For the real dry run:** the KnockRoute export file (`extract.sql`), which needs KnockRoute's database password or someone with it to run one command.
+5. **On the day:** the Therisma side's confirmed table and column names in `field-map.json`, whoever runs the final command, and the go plus a quiet hour.

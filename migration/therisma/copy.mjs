@@ -294,16 +294,22 @@ function checkRoster({ cols, rows }) {
   for (const r of rows) {
     const at = `roster line ${r.line} (${r.name || 'no name'})`
     if (!r.name) block(`${at}: name is empty.`)
-    if (!r.email) block(`${at}: email is empty.`)
-    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email)) block(`${at}: "${r.email}" isn't an email address.`)
+    const tid = r.therisma_user_id ?? ''
+    if (tid && !UUID.test(tid)) block(`${at}: therisma_user_id "${tid}" isn't a uuid.`)
+    if (!r.email && !tid) block(`${at}: no email and no therisma_user_id yet (pending: Therisma sends the placeholder person's user id).`)
+    else if (!r.email) {
+      /* placeholder person in Therisma, matched by user id */
+    } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email)) block(`${at}: "${r.email}" isn't an email address.`)
     else if (/@knockroute\.example\.com$/i.test(r.email)) block(`${at}: ${r.email} is a KnockRoute stand-in address; Therisma needs the person's real email.`)
     if (r.email && seen.has(r.email.toLowerCase())) block(`${at}: same email as line ${seen.get(r.email.toLowerCase())}.`)
-    seen.set(r.email.toLowerCase(), r.line)
+    if (r.email) seen.set(r.email.toLowerCase(), r.line)
+    if (tid && seen.has(tid.toLowerCase())) block(`${at}: same therisma_user_id as line ${seen.get(tid.toLowerCase())}.`)
+    if (tid) seen.set(tid.toLowerCase(), r.line)
     if (!['owner', 'manager', 'agent'].includes(r.role)) block(`${at}: role must be owner, manager or agent (got "${r.role}").`)
     if (r.role !== 'owner' && !r.reports_to) block(`${at}: reports_to is empty (only owners can report to nobody).`)
-    if (r.reports_to) {
-      const boss = rows.find((b) => eq(b.name, r.reports_to) || eq(b.email, r.reports_to))
-      if (!boss) block(`${at}: reports_to "${r.reports_to}" isn't anyone on the roster.`)
+    for (const to of r.reports_to ? r.reports_to.split('|') : []) {
+      const boss = rows.find((b) => eq(b.name, to) || eq(b.email, to))
+      if (!boss) block(`${at}: reports_to "${to}" isn't anyone on the roster.`)
       else if (boss === r) block(`${at}: reports to themself.`)
       else if (boss.role === 'agent') block(`${at}: reports to ${boss.name}, who is an agent.`)
     }
@@ -314,7 +320,8 @@ function checkRoster({ cols, rows }) {
     let cur = r
     while (cur && cur.reports_to && !chain.has(cur)) {
       chain.add(cur)
-      cur = rows.find((b) => eq(b.name, cur.reports_to) || eq(b.email, cur.reports_to))
+      const to = cur.reports_to.split('|')[0]
+      cur = rows.find((b) => eq(b.name, to) || eq(b.email, to))
     }
     if (cur && chain.has(cur)) {
       block(`roster: ${r.name}'s reports-to chain goes in a circle.`)
@@ -406,7 +413,8 @@ function buildSql(org) {
   const peopleRows = people.map((p) => {
     const t = personTarget.get(p.id)
     const email = t === 'former' ? placeholderEmail : t.email
-    return `(${lit(p.id)}::uuid, ${lit(p.name)}, ${lit(email || null)})`
+    const tid = t === 'former' ? null : t.therisma_user_id || null
+    return `(${lit(p.id)}::uuid, ${lit(p.name)}, ${lit(email || null)}, ${tid ? `${lit(tid)}::uuid` : 'null'})`
   })
   const lookup = map.people.lookup_sql.replaceAll(':org', `${orgLit}::uuid`).replaceAll(':email', 'p.email')
   const parts = [
@@ -418,12 +426,18 @@ function buildSql(org) {
     '',
     '-- KnockRoute person → Therisma user, looked up by email inside this org.',
     'create temp table kr_people (kr_id uuid primary key, name text, email text, therisma_id uuid) on commit drop;',
-    `insert into kr_people (kr_id, name, email) values\n${peopleRows.join(',\n')};`,
-    `update kr_people p set therisma_id = (${lookup}) where p.email is not null;`,
+    `insert into kr_people (kr_id, name, email, therisma_id) values\n${peopleRows.join(',\n')};`,
+    `update kr_people p set therisma_id = (${lookup}) where p.therisma_id is null and p.email is not null;`,
     `do $$ declare missing text; begin
   select string_agg(name || ' <' || coalesce(email, 'no email') || '>', ', ') into missing from kr_people where therisma_id is null and email is not null;
   if missing is not null then raise exception 'Not in the Therisma org yet (invite them first): %', missing; end if;
 end $$;`,
+    map.people.id_check_sql
+      ? `do $$ declare missing text; begin
+  select string_agg(p.name, ', ') into missing from kr_people p where p.therisma_id is not null and not exists (${map.people.id_check_sql.replaceAll(':org', `${orgLit}::uuid`).replaceAll(':id', 'p.therisma_id')});
+  if missing is not null then raise exception 'Not members of the Therisma org: %', missing; end if;
+end $$;`
+      : '',
     'create function pg_temp.kr_user(uuid) returns uuid language sql stable as $f$ select therisma_id from kr_people where kr_id = $1 $f$;',
     '',
     `-- Lists (${lists.length})`,
